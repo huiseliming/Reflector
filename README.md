@@ -8,3 +8,7 @@ cmake -G Ninja ../llvm -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" -DLLVM_B
 clone the repository to clang-tools-extra folder
 
 rebuild llvm
+
+print AST use
+
+clang -cc1 -ast-dump AST.cpp
