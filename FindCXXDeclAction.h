@@ -14,9 +14,23 @@ public:
   explicit FindCXXDeclVisitor(ASTContext *Context)
     : Context(Context) {}
 
-  bool VisitCXXRecordDecl(CXXRecordDecl *Declaration) {
-    llvm::outs() << Declaration->getTypeForDecl()->getTypeClassName();
-    Declaration->dump();
+  bool VisitCXXRecordDecl(CXXRecordDecl *CXXDecl) {
+    //llvm::outs() << "\ndump: \n" ;// << Declaration->getTypeForDecl()->getTypeClassName();
+    //CXXDecl->dump();
+    if(CXXDecl->isClass()){
+      // llvm::outs() << "QualifiedNameAsString : " << CXXDecl->getQualifiedNameAsString();
+      // llvm::outs() << "QualifiedNameAsString : " << CXXDecl->printNestedNameSpecifier();
+      llvm::outs() << "Fields Dump : \n"; 
+      for(auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
+      {
+        Field->dump();
+        Field->printName(llvm::outs());
+        llvm::outs() << "\n"
+      }
+      llvm::outs() << "\n"
+      ;
+    }
+
     return true;
   }
 

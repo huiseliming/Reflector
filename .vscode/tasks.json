@@ -3,10 +3,32 @@
     // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
+        // {
+        //     "label": "build",
+        //     "type": "shell",
+        //     "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/build.sh",
+        //     "group":{
+        //         "kind": "build",
+        //         "isDefault": true
+        //     }
+        // },
+        // {
+        //     "label": "PrintCXXDeclAST",
+        //     "type": "shell",
+        //     "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/PrintCXXDeclAST.sh",
+        //     "args": ["../ASTDumpCpp/AST.cpp"]
+        // },
+        // {
+        //     "label": "PrintAST",
+        //     "type": "shell",
+        //     "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/PrintAST.sh",
+        //     "args": ["../ASTDumpCpp/AST.cpp"]
+        // },
+
         {
             "label": "build",
             "type": "shell",
-            "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/build.sh",
+            "command": "${workspaceFolder}/Scripts/build.sh",
             "group":{
                 "kind": "build",
                 "isDefault": true
@@ -15,14 +37,16 @@
         {
             "label": "PrintCXXDeclAST",
             "type": "shell",
-            "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/PrintCXXDeclAST.sh",
-            "args": ["../ASTDumpCpp/AST.cpp"]
+            "command": "${workspaceFolder}/Scripts/PrintCXXDeclAST.sh",
+            "args": [ "../ASTDumpCpp/AST.cpp" ],
+            "dependsOn" : "build"
         },
         {
             "label": "PrintAST",
             "type": "shell",
-            "command": "${workspaceFolder}/clang-tools-extra/MetadataGenerator/Scripts/PrintAST.sh",
-            "args": ["../ASTDumpCpp/AST.cpp"]
+            "command": "${workspaceFolder}/Scripts/PrintAST.sh",
+            "args": [ "../ASTDumpCpp/AST.cpp" ],
+            "dependsOn" : "build"
         }
     ]
 }
