@@ -1,6 +1,7 @@
 #pragma once 
 
 class A{
+    virtual ~A();
     float b;
     int c;
     bool d;
@@ -9,4 +10,11 @@ class A{
 };
 
 
+class B{
 
+    float ll;
+};
+
+void functionk(){
+
+}
