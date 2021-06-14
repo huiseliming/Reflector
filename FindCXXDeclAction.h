@@ -1,5 +1,6 @@
 #pragma once 
 #include "clang/AST/ASTConsumer.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendAction.h"
@@ -7,6 +8,11 @@
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
+
+uint64_t GetNextTypeId(){
+  static uint64_t TypeIdCounter = 1024;
+  return TypeIdCounter + 1;
+}
 
 class FindCXXDeclVisitor
   : public RecursiveASTVisitor<FindCXXDeclVisitor> {
@@ -16,21 +22,54 @@ public:
 
   bool VisitCXXRecordDecl(CXXRecordDecl *CXXDecl) {
     //llvm::outs() << "\ndump: \n" ;// << Declaration->getTypeForDecl()->getTypeClassName();
-    //CXXDecl->dump();
-    if(CXXDecl->isClass()){
+    CXXDecl->dump();
+    if(CXXDecl->isClass() || CXXDecl->isStruct()){
+      
       // llvm::outs() << "QualifiedNameAsString : " << CXXDecl->getQualifiedNameAsString();
       // llvm::outs() << "QualifiedNameAsString : " << CXXDecl->printNestedNameSpecifier();
-      llvm::outs() << "Fields Dump : \n"; 
+      llvm::outs() << CXXDecl->getQualifiedNameAsString() << "\n";
+      // llvm::outs() << CXXDecl->getQualifier()->getAsNamespace()->getNameAsString() << "\n";
+      // CXXDecl->printNestedNameSpecifier(llvm::outs());
+      TypeInfo ThisDeclTypeInfo = CXXDecl->getASTContext().getTypeInfo(CXXDecl->getTypeForDecl());
+      llvm::outs() << "class " << CXXDecl->getNameAsString() << "\n";
+      llvm::outs() << "class " << CXXDecl->getQualifiedNameAsString() << "\n";
+      llvm::outs() << "{\n";
+      llvm::outs() << "  static Class* GetStaticClass()";
+      llvm::outs() << "  {";
+      llvm::outs() << "    static Class StaticClass";
+      llvm::outs() << "    (";
+      llvm::outs() << "        " << GetNextTypeId() << ",";
+      llvm::outs() << "        \"" << CXXDecl->getQualifiedNameAsString() << "\", ";
+      llvm::outs() << "        " << ThisDeclTypeInfo.Width << ", ";
+      llvm::outs() << "        std::vector<Field>{ ";
+      llvm::outs() << "            Field(Type::GetInt8Type(), 0), ";
+      llvm::outs() << "            Field(Type::GetUint8Type(), 0, 4),";
+      llvm::outs() << "        }, ";
+      llvm::outs() << "        std::vector<Function>{ ";
+      llvm::outs() << "            Function(";
+      llvm::outs() << "                \"FunctionName\",";
+      llvm::outs() << "                std::vector<Field>{ ";
+      llvm::outs() << "                    Field(Type::GetInt8Type(), 0), ";
+      llvm::outs() << "                    Field(Type::GetUint8Type(), 0, 4),";
+      llvm::outs() << "                },";
+      llvm::outs() << "                Field(Type::GetVoidType(),0)";
+      llvm::outs() << "            ),";
+      llvm::outs() << "        }";
+      llvm::outs() << "    );";
+      llvm::outs() << "    return &StaticClass;";
+      llvm::outs() << "  }";
+      
+
       for(auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
       {
-        Field->dump();
-        Field->printName(llvm::outs());
-        llvm::outs() << "\n"
+        // Field->dump();
+        llvm::outs() << "  Field " << Field->getType().getAsString() << " " << Field->getNameAsString() << "\n";
+        if(Field->getType()->isBuiltinType()){
+        }else{
+        }
       }
-      llvm::outs() << "\n"
-      ;
+      llvm::outs() << "} " << "\n";
     }
-
     return true;
   }
 
