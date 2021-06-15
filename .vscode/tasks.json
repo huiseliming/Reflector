@@ -29,6 +29,9 @@
             "label": "build",
             "type": "shell",
             "command": "${workspaceFolder}/Scripts/build.sh",
+            "windows" : { 
+                "command": "${workspaceFolder}/Scripts/build.bat"
+            },
             "group":{
                 "kind": "build",
                 "isDefault": true
@@ -39,6 +42,9 @@
             "type": "shell",
             "command": "${workspaceFolder}/Scripts/PrintCXXDeclAST.sh",
             "args": [ "../ASTDumpCpp/AST.cpp" ],
+            "windows" : { 
+                "command": "${workspaceFolder}/Scripts/PrintCXXDeclAST.bat",
+             },
             "dependsOn" : "build"
         },
         {
@@ -46,6 +52,10 @@
             "type": "shell",
             "command": "${workspaceFolder}/Scripts/PrintAST.sh",
             "args": [ "../ASTDumpCpp/AST.cpp" ],
+            "windows" : { 
+                "command": "${workspaceFolder}/Scripts/PrintAST.bat",
+             },
+             
             "dependsOn" : "build"
         }
     ]
