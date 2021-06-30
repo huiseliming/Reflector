@@ -32,5 +32,6 @@ namespace AS{
     class C{
         int fds;
         B* as;
+        C* pC;
     };
 }

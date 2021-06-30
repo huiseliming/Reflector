@@ -36,6 +36,7 @@ Class* GetStaticClass()
         MetaClass.AddField(Field(Type::GetStringType(), Type::GetStringType()->Size));
         MetaClass.AddField(Field(Type::GetUint16Type(), Type::GetUint16Type()->Size));
         MetaClass.AddFunction(Function("XXX",{},{}));
+        
         return &MetaClass;
     };
     static Class* MetaClass = GenerateClass();
