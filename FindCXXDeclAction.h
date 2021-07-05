@@ -23,12 +23,12 @@ uint64_t GetNextTypeId(){
   return TypeIdCounter + 1;
 }
 
-Type* GetType(QualType QT)
+clang::Type* GetType(QualType QT)
 {
   if (QT->isPointerType())
   {
     QualType PointeeType = QT->getPointeeType();
-    const Type* TypePtr = PointeeType.getTypePtr();
+    const clang::Type *TypePtr = PointeeType.getTypePtr();
     if (TypePtr->isPointerType()) {
     }
   }
