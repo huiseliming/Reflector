@@ -1,12 +1,11 @@
-#include "CodeGenerator.h"
-#include "MetaRelect/MetaType.h"
+#include "TypeWriter.h"
 #include "clang/AST/DeclCXX.h"
 #include <functional>
 #include <string>
 
-std::unordered_map<std::string, uint64_t> CodeGenerator::TypeNameMap;
-std::unordered_map<uint64_t, std::unique_ptr<Type>> CodeGenerator::TypeTable;
-uint64_t CodeGenerator::TypeIdCounter;
+std::unordered_map<std::string, uint64_t> TypeManager::TypeNameMap;
+std::unordered_map<uint64_t, std::unique_ptr<Type>> TypeManager::TypeTable;
+uint64_t TypeManager::TypeIdCounter = 1024;
 
 class ClassGenerator
 {
