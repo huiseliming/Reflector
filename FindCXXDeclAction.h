@@ -9,9 +9,27 @@
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "clang/AST/RecordLayout.h"
 #include <unordered_map>
+#include "Descriptor.h"
+#include "CodeGenerator.h"
 
 using namespace clang;
+
+std::vector<std::string> SplitAnnotation(StringRef AnnotationString)
+{
+    std::vector<std::string> Annotations;
+    size_t PreviousPos = 0;
+    for (size_t i = 0; i < AnnotationString.size(); i++)
+    {
+        if(AnnotationString[i] == ',') {
+            Annotations.emplace_back(std::string(AnnotationString.data() + PreviousPos, i - PreviousPos));
+            PreviousPos = i + 1;
+        }
+    }
+    Annotations.emplace_back(std::string(AnnotationString.data() + PreviousPos, AnnotationString.size() - PreviousPos));
+    return std::move(Annotations);
+}
 
 std::string WarpperString(std::string Str)
 {
@@ -19,68 +37,30 @@ std::string WarpperString(std::string Str)
 }
 
 uint64_t GetNextTypeId(){
-  static uint64_t TypeIdCounter = 1024;
-  return TypeIdCounter + 1;
+    static uint64_t TypeIdCounter = 1024;
+    return TypeIdCounter + 1;
 }
 
 clang::Type* GetType(QualType QT)
 {
-  if (QT->isPointerType())
-  {
-    QualType PointeeType = QT->getPointeeType();
-    const clang::Type *TypePtr = PointeeType.getTypePtr();
-    if (TypePtr->isPointerType()) {
+    if (QT->isPointerType())
+    {
+        QualType PointeeType = QT->getPointeeType();
+        const clang::Type *TypePtr = PointeeType.getTypePtr();
+        if (TypePtr->isPointerType()) {
+        }
     }
-  }
-  return nullptr;
+    return nullptr;
 }
 
 class FindCXXDeclVisitor
   : public RecursiveASTVisitor<FindCXXDeclVisitor> {
 public:
   explicit FindCXXDeclVisitor(ASTContext *Context)
-    : Context(Context) {}
-
-  std::string ParseField(FieldDecl* Field)
-  {
-    QualType FieldType = Field->getType();
-    // QualType RemovePointersReferencesType = RemovePointersAndReferences(FieldType);
-    TypeInfo FieldTypeInfo = Context->getTypeInfo(Field->getType().getTypePtr());
-    if (FieldType->isBuiltinType())
+    : Context(Context) 
     {
-      if(FieldType->isBooleanType()) //TODO: test
-      {
-        return "Type::GetBooleanType()";
-      }
-      if(FieldType->isIntegerType())//TODO: test
-      {
-        if(FieldType->isUnsignedIntegerType())
-        {
-          if (FieldTypeInfo.Width == 1) return "Type::GetUint8Type()";
-          if (FieldTypeInfo.Width == 2) return "Type::GetUint16Type()";
-          if (FieldTypeInfo.Width == 4) return "Type::GetUint32Type()";
-          if (FieldTypeInfo.Width == 8) return "Type::GetUint64Type()";
-          return "tan90";
-        }
-        if (FieldTypeInfo.Width == 1) return "Type::GetInt8Type()";
-        if (FieldTypeInfo.Width == 2) return "Type::GetInt16Type()";
-        if (FieldTypeInfo.Width == 4) return "Type::GetInt32Type()";
-        if (FieldTypeInfo.Width == 8) return "Type::GetInt64Type()";
-        return "tan90";
-      }
-      if(FieldType->isFloatingType()) //TODO: test
-      {
-        if (FieldTypeInfo.Width == 4) return "Type::GetFloatType()";
-        if (FieldTypeInfo.Width == 8) return "Type::GetDoubleType()";
-      }
     }
-    return "Type::GetVoidType()";
-  }
-  
-  void GenerateRegisterType(QualType )
-  {
-    
-  }
+
 
   bool IsAddressType(QualType InType)
   {
@@ -158,10 +138,139 @@ public:
       }
     }
   }
-
+    FTypeDescriptor* ParseToDescriptor(CXXRecordDecl* CXXDecl)
+    {
+        bool NeedParse = false;
+        if (!CXXDecl->hasAttrs()) return nullptr;
+        AttrVec Attrs = CXXDecl->getAttrs();
+        for (size_t i = 0; i < Attrs.size(); i++)
+        {
+            if (Attrs[i]->getKind() == attr::Annotate)
+            {
+                AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(Attrs[i]);
+                std::vector<std::string> Annotations = SplitAnnotation(AnnotateAttrPtr->getAnnotation());
+                for (size_t i = 0; i < Annotations.size(); i++)
+                {
+                    if(Annotations[i] == "Object") {
+                        NeedParse = true;
+                    }
+                }
+            }
+        }
+        if (!NeedParse) return nullptr;
+        FTypeDescriptor* TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(CXXDecl->getQualifiedNameAsString().c_str());
+        if (TypeDescriptor) return TypeDescriptor;
+        if(CXXDecl->isClass()){
+            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FClassDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
+        } else if(CXXDecl->isStruct()){
+            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FStructDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
+        }else if(CXXDecl->isEnum()){
+            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FEnumDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
+        } else if(CXXDecl->isUnion()){
+            SourceRange Loc = CXXDecl->getSourceRange();
+            PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this type <Union>", PLoc.getFilename(), PLoc.getLine(), CXXDecl->getQualifiedNameAsString());
+            return nullptr;
+        }else{
+            SourceRange Loc = CXXDecl->getSourceRange();
+            PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), CXXDecl->getQualifiedNameAsString());
+            return nullptr;
+        }
+        TypeDescriptor = CCodeGenerator::Get().Descriptors.back().get();
+        SourceRange Loc = CXXDecl->getSourceRange();
+        TypeDescriptor->DeclaredFile = Context->getSourceManager().getFilename(Loc.getBegin());
+        FTypeDescriptorTable::Get().RegisterDescriptor(CXXDecl->getQualifiedNameAsString().c_str(), TypeDescriptor);
+        const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(CXXDecl);
+        for (auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
+        {
+            NeedParse = false;
+            if(!Field->hasAttrs()) continue;
+            AttrVec Attrs = Field->getAttrs();
+            for (size_t i = 0; i < Attrs.size(); i++)
+            {
+                if (Attrs[i]->getKind() == attr::Annotate)
+                {
+                    AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(Attrs[i]);
+                    std::vector<std::string> Annotations = SplitAnnotation(AnnotateAttrPtr->getAnnotation());
+                    for (size_t i = 0; i < Annotations.size(); i++)
+                    {
+                        if (Annotations[i] == "Property") {
+                            NeedParse = true;
+                        }
+                    }
+                }
+            }
+            if (!NeedParse) continue;
+            QualType FieldType = Field->getType();
+            QualType FieldUnqualifiedType = Field->getType();
+            TypeDescriptor->Fields.push_back(FField());
+            TypeDescriptor->Fields.back().FieldName = Field->getName().str();
+            TypeDescriptor->Fields.back().FieldOffset = RecordLayout.getFieldOffset(Field->getFieldIndex());
+            if(FieldType->isArrayType()){
+                TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(FieldType.getTypePtr());
+                QualType CheckedType = FieldType;
+                QualType ArrayElementType;
+                while (CheckedType->isArrayType())
+                {
+                    const clang::ArrayType* ArrayFieldType = CheckedType->getAsArrayTypeUnsafe();
+                    ArrayElementType = ArrayFieldType->getElementType();
+                    CheckedType = ArrayElementType;
+                }
+                TypeInfo ArrayElementTypeInfo = Context->getTypeInfo(ArrayElementType);
+                TypeDescriptor->Fields.back().Number = FieldTypeTypeInfo.Width / ArrayElementTypeInfo.Width;
+                FieldUnqualifiedType = ArrayElementType;
+            }
+            else
+            {
+                FieldUnqualifiedType = FieldType;
+            }
+            if(FieldUnqualifiedType->isPointerType() || FieldUnqualifiedType->isReferenceType())
+            {
+                QualType PointeeType = FieldUnqualifiedType->getPointeeType();
+                FieldUnqualifiedType = PointeeType;
+            }
+            if(FieldUnqualifiedType->isPointerType() || FieldUnqualifiedType->isReferenceType()){
+                SourceRange Loc = Field->getSourceRange();
+                PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <Multi-level Pointer>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+            }
+            if (FieldUnqualifiedType->isArrayType()) {
+                SourceRange Loc = Field->getSourceRange();
+                PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <The Pointer Pointer To Array>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+            }
+            if (FieldUnqualifiedType->isBuiltinType())
+            {
+                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(FieldUnqualifiedType.getAsString().c_str());
+            }
+            else if(FieldUnqualifiedType->isStructureOrClassType()|| FieldUnqualifiedType->isEnumeralType())
+            {
+                FTypeDescriptor* ParsedDescriptor = ParseToDescriptor(FieldUnqualifiedType->getAsCXXRecordDecl());
+                if(ParsedDescriptor){
+                    TypeDescriptor->Fields.back().TypeDescriptor = ParseToDescriptor(FieldUnqualifiedType->getAsCXXRecordDecl());
+                }else{
+                    SourceRange Loc = Field->getSourceRange();
+                    PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                    llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                }
+            }
+            else
+            {
+                SourceRange Loc = Field->getSourceRange();
+                PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <Union>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+            }
+            assert(TypeDescriptor->Fields.back().TypeDescriptor != nullptr);
+        }
+        llvm::outs() << TypeDescriptor->Dump();
+        return TypeDescriptor;
+    }
   bool VisitCXXRecordDecl(CXXRecordDecl *CXXDecl) {
+    //CXXDecl->dump();
     //llvm::outs() << "\ndump: \n" ;// << Declaration->getTypeForDecl()->getTypeClassName();
-    PrintCXXRecordDecl(CXXDecl);
+    //PrintCXXRecordDecl(CXXDecl);
+    ParseToDescriptor(CXXDecl);
     // CXXDecl->dump();
     // llvm::outs() << CXXDecl << "\n";
     // if(CXXDecl->isClass() || CXXDecl->isStruct()){
