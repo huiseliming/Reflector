@@ -106,8 +106,8 @@ FTypeDescriptorTable& FTypeDescriptorTable::Get()
 			{}
 			virtual void* New() override { return new std::string(); }
 			virtual void Delete(void* Object) override { delete (std::string*)Object; }
-			virtual void Constructor(void* ConstructedObject) { new (ConstructedObject) std::basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
-			virtual void Destructor(void* DestructedObject) { reinterpret_cast<std::string*>(DestructedObject)->~basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
+			virtual void Constructor(void* ConstructedObject) override { new (ConstructedObject) std::basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
+			virtual void Destructor(void* DestructedObject) override { reinterpret_cast<std::string*>(DestructedObject)->~basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
 		};
 		static FStdStringDescriptor StdStringDescriptor("std::string", sizeof(std::string));
 		StdStringDescriptor.TypeFlag = 0x00000003;

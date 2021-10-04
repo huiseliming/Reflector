@@ -16,9 +16,9 @@
 
 using namespace clang;
 
-std::vector<std::string> SplitAnnotation(StringRef AnnotationString)
+void SplitAnnotation(StringRef AnnotationString, std::vector<std::string>& Annotations)
 {
-    std::vector<std::string> Annotations;
+    Annotations.clear();
     size_t PreviousPos = 0;
     for (size_t i = 0; i < AnnotationString.size(); i++)
     {
@@ -28,8 +28,22 @@ std::vector<std::string> SplitAnnotation(StringRef AnnotationString)
         }
     }
     Annotations.emplace_back(std::string(AnnotationString.data() + PreviousPos, AnnotationString.size() - PreviousPos));
-    return std::move(Annotations);
 }
+
+bool FindReflectAnnotation(Decl* CheckedDecl, const char* FoundMarkStr, std::vector<std::string>& ReflectAnnotation) {
+    for (auto AttrIterator = CheckedDecl->attr_begin(); AttrIterator < CheckedDecl->attr_end(); AttrIterator++) {
+        if ((*AttrIterator)->getKind() == attr::Annotate)
+        {
+            AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(*AttrIterator);
+            SplitAnnotation(AnnotateAttrPtr->getAnnotation(), ReflectAnnotation);
+            if(ReflectAnnotation.size() > 0 && ReflectAnnotation[0] == FoundMarkStr){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 
 class FindCXXDeclVisitor
   : public RecursiveASTVisitor<FindCXXDeclVisitor> {
@@ -41,28 +55,12 @@ public:
 
     FTypeDescriptor* ParseToDescriptor(CXXRecordDecl* CXXDecl)
     {
+        std::vector<std::string> ReflectAnnotation;
         FTypeDescriptor* TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(CXXDecl->getQualifiedNameAsString().c_str());
         if (TypeDescriptor) return TypeDescriptor;
-        bool NeedParse = false;
         if (!CXXDecl->hasAttrs()) return nullptr;
-        AttrVec Attrs = CXXDecl->getAttrs();
-        for (size_t i = 0; i < Attrs.size(); i++)
-        {
-            if (Attrs[i]->getKind() == attr::Annotate)
-            {
-                AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(Attrs[i]);
-                std::vector<std::string> Annotations = SplitAnnotation(AnnotateAttrPtr->getAnnotation());
-                for (size_t i = 0; i < Annotations.size(); i++)
-                {
-                    if (Annotations[i] == "Object") {
-                        llvm::outs() << std::format("Found Object<{:s}>\n", CXXDecl->getQualifiedNameAsString());
-                        NeedParse = true;
-                    }
-                }
-            }
-        }
-        if (!NeedParse) return nullptr;
-        //CXXDecl->dump();
+        if(!FindReflectAnnotation(CXXDecl, "Object", ReflectAnnotation)) return nullptr;
+        CXXDecl->dump();
         if(CXXDecl->isClass()){
             CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FClassDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
         } else if(CXXDecl->isStruct()){
@@ -82,24 +80,29 @@ public:
         }
 
         TypeDescriptor = CCodeGenerator::Get().Descriptors.back().get();
-        CXXConstructorDecl* UserDeclaredDeDefaultConstructor = nullptr;
-        for (auto Method = CXXDecl->method_begin(); Method != CXXDecl->method_end(); Method++)
+
+        // Function parse
+        CXXConstructorDecl* UserDeclaredDefaultConstructor = nullptr;
+        for (auto MethodIterator = CXXDecl->method_begin(); MethodIterator != CXXDecl->method_end(); MethodIterator++)
         {
-            CXXConstructorDecl* Constructor = dyn_cast<CXXConstructorDecl>(*Method);
-            if (Constructor && Constructor->param_size() == 0)
+            CXXMethodDecl* Method = *MethodIterator;
+            CXXConstructorDecl* Constructor = dyn_cast<CXXConstructorDecl>(*MethodIterator);
+            if (Constructor && Constructor->param_empty())
             {
-                UserDeclaredDeDefaultConstructor = Constructor;
+                UserDeclaredDefaultConstructor = Constructor;
             }
+            if (!FindReflectAnnotation(Method, "Function", ReflectAnnotation)) continue;
         }
-        if(UserDeclaredDeDefaultConstructor){
-            if (!UserDeclaredDeDefaultConstructor->isDeleted())
-                TypeDescriptor->TypeFlag |= kHasDestructorFlagBit;
+
+        // check constructor and destructor 
+        if(UserDeclaredDefaultConstructor){
+            if (!UserDeclaredDefaultConstructor->isDeleted())
+                TypeDescriptor->TypeFlag |= kHasDefaultConstructorFlagBit;
         }else{
             if (CXXDecl->hasDefaultConstructor()) {
                 TypeDescriptor->TypeFlag |= kHasDefaultConstructorFlagBit;
             }
         }
-
         auto Destructor = CXXDecl->getDestructor();
         if(Destructor){
             if(!Destructor->isDeleted()) 
@@ -109,36 +112,20 @@ public:
                 TypeDescriptor->TypeFlag |= kHasDestructorFlagBit;
         }
 
+        // Field parse
         SourceRange Loc = CXXDecl->getSourceRange();
         TypeDescriptor->DeclaredFile = Context->getSourceManager().getFilename(Loc.getBegin());
         FTypeDescriptorTable::Get().RegisterDescriptor(CXXDecl->getQualifiedNameAsString().c_str(), TypeDescriptor);
         const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(CXXDecl);
         for (auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
         {
-            NeedParse = false;
-            if(!Field->hasAttrs()) continue;
-            AttrVec Attrs = Field->getAttrs();
-            for (size_t i = 0; i < Attrs.size(); i++)
-            {
-                if (Attrs[i]->getKind() == attr::Annotate)
-                {
-                    AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(Attrs[i]);
-                    std::vector<std::string> Annotations = SplitAnnotation(AnnotateAttrPtr->getAnnotation());
-                    for (size_t i = 0; i < Annotations.size(); i++)
-                    {
-                        if (Annotations[i] == "Property") {
-                            llvm::outs() << std::format("Found Object<{:s}> Property<{:s}>\n", CXXDecl->getQualifiedNameAsString(), Field->getNameAsString());
-                            NeedParse = true;
-                        }
-                    }
-                }
-            }
-            if (!NeedParse) continue;
+            if (!FindReflectAnnotation(*Field, "Property", ReflectAnnotation)) continue;
             QualType FieldType = Field->getType();
             QualType FieldUnqualifiedType = Field->getType();
             TypeDescriptor->Fields.push_back(FField());
             TypeDescriptor->Fields.back().FieldName = Field->getName().str();
             TypeDescriptor->Fields.back().FieldOffset = RecordLayout.getFieldOffset(Field->getFieldIndex());
+            // if is array
             if(FieldType->isArrayType()){
                 TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(FieldType.getTypePtr());
                 QualType CheckedType = FieldType;
@@ -157,6 +144,7 @@ public:
             {
                 FieldUnqualifiedType = FieldType;
             }
+            // if is pointer type
             if (FieldUnqualifiedType->isPointerType())
             {
                 TypeDescriptor->Fields.back().QualifierFlag |= kPointerFlagBit;
@@ -165,17 +153,20 @@ public:
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
+            // if is reference type
             if(FieldUnqualifiedType->isReferenceType())
             {
                 TypeDescriptor->Fields.back().QualifierFlag |= kReferenceFlagBit;
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
+            // unsupported Multi-level Pointer
             if(FieldUnqualifiedType->isPointerType() || FieldUnqualifiedType->isReferenceType()){
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <Multi-level Pointer>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
+            // unsupported The Pointer Pointer To Array
             if (FieldUnqualifiedType->isArrayType()) {
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
