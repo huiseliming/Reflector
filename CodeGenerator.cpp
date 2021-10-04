@@ -81,13 +81,15 @@ bool CCodeGenerator::Generate()
                 GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedHeaderFile.open(GeneratedHeaderFile, std::ios::out | std::ios::trunc);
                 GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedSourceFile.open(GeneratedSourceFile, std::ios::out | std::ios::trunc);
                 if (!GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedHeaderFile.is_open()) {
-                    llvm::errs() << std::format("File<{:s}> open failed", GeneratedHeaderFile);
+                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedHeaderFile);
                     return false;
                 }
                 if (!GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedSourceFile.is_open()) {
-                    llvm::errs() << std::format("File<{:s}> open failed", GeneratedSourceFile);
+                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedSourceFile);
                     return false;
                 }
+                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedHeaderFile);
+                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedSourceFile);
                 std::string HeaderFileBegin = "#pragma once\n\n";
                 std::string SourceFileBegin = "#include \"" + Filename + "\"\n\n";
                 GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
@@ -122,30 +124,63 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FTypeDescriptor* Descriptor)
     std::string SourceCode;
     std::string TypeKind = Descriptor->GetTypeKind();
     TypeKind[0] = std::toupper(TypeKind[0]);
-    SourceCode += std::format("Uint32 {:s}::GetTypeId() {{ return {:d}; }}\n\n", Descriptor->TypeName[0], Descriptor->TypeId);
-    SourceCode += std::format("FTypeDescriptor* {:s}::GetTypeDescriptor()\n", Descriptor->TypeName[0]);
-    SourceCode += std::format("{{\n");
-    SourceCode += std::format("    static std::function<FTypeDescriptor* ()> DescriptorInitializer = []() -> FTypeDescriptor* {{       \n");
-    SourceCode += std::format("        static F{0:s}Descriptor Descriptor(\"{1:s}\", sizeof({1:s}));                                      \n", TypeKind, Descriptor->TypeName[0]);
-    SourceCode += std::format("        Descriptor.Fields.resize({:d});                                                               \n", Descriptor->Fields.size());
+    SourceCode += std::format("Uint32 {0:s}::GetTypeId() {{ return {1:d}; }}\n\n"
+                              "FTypeDescriptor* {0:s}::GetTypeDescriptor()\n"
+                              "{{\n"
+                              "    static std::function<FTypeDescriptor* ()> DescriptorInitializer = []() -> FTypeDescriptor* {{\n"
+                              "        struct F{0:s}Descriptor : public F{3:s}Descriptor {{\n"
+                              "            F{0:s}Descriptor(const char* InTypeName, size_t InTypeSize = 0)\n"
+                              "                : F{3:s}Descriptor(InTypeName, InTypeSize)\n"
+                              "            {{}}\n"
+                              "            {4:s}\n"
+                              "            {5:s}\n"
+                              "            {6:s}\n"
+                              "            {7:s}\n"
+                              "        }};\n"
+                              "        static F{0:s}Descriptor Descriptor(\"{0:s}\", sizeof({0:s}));\n"
+                              "        Descriptor.Fields.resize({2:d});\n", Descriptor->TypeName[0], Descriptor->TypeId, Descriptor->Fields.size(), TypeKind,
+                                Descriptor->HasDefaultConstructor() ? "virtual bool HasDefaultConstructor() {{ return true; }}" : "",
+                                Descriptor->HasDestructor() ? "virtual bool HasDestructor() {{ return true; }}" : "",
+                                Descriptor->HasDefaultConstructor() ? std::format("virtual void Constructor(void* ConstructedObject) {{ new (ConstructedObject) {0:s}(); }}", Descriptor->TypeName[0]) : "",
+                                Descriptor->HasDestructor() ? std::format("virtual void Destructor(void* DestructedObject) {{ reinterpret_cast<{0:s}*>(DestructedObject)->~{0:s}(); }}", Descriptor->TypeName[0]) : "");
     for (size_t i = 0; i < Descriptor->Fields.size(); i++)
     {
-        SourceCode += std::format("        Descriptor.Fields[{:d}].FieldName = \"{:s}\";                                                \n", i, Descriptor->Fields[i].FieldName);
-        SourceCode += std::format("        Descriptor.Fields[{:d}].FieldOffset = {:d};                                                   \n", i, Descriptor->Fields[i].FieldOffset);
-        SourceCode += std::format("        Descriptor.Fields[{:d}].Number = {:d};                                                        \n", i, Descriptor->Fields[i].Number);
-        if (Descriptor->Fields[i].TypeDescriptor->IsBuiltInType())
-            SourceCode += std::format("        Descriptor.Fields[{:d}].TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor({:d});//{:s}                           \n", i, Descriptor->Fields[i].TypeDescriptor->TypeId, Descriptor->Fields[i].TypeDescriptor->TypeName[0]);
-        else
-            SourceCode += std::format("        Descriptor.Fields[{:d}].TypeDescriptor = {:s}::GetTypeDescriptor();                           \n", i, Descriptor->Fields[i].TypeDescriptor->GetTypeName());
+    SourceCode += std::format("        Descriptor.Fields[{0:d}].FieldName = \"{1:s}\";\n"
+                              "        Descriptor.Fields[{0:d}].FieldOffset = offsetof({2:s},{1:s});\n"
+                              "        Descriptor.Fields[{0:d}].Number = {3:d};\n"
+                              "        Descriptor.Fields[{0:d}].TypeDescriptor = {4:s}\n"
+                              "        Descriptor.Fields[{0:d}].QualifierFlag = {5:#010x};\n", i, Descriptor->Fields[i].FieldName, Descriptor->TypeName[0], Descriptor->Fields[i].Number, 
+                                    Descriptor->Fields[i].TypeDescriptor->IsBuiltInType() ? 
+                                    std::format("FTypeDescriptorTable::Get().GetDescriptor({:d}); //{:s}", Descriptor->Fields[i].TypeDescriptor->TypeId, Descriptor->Fields[i].TypeDescriptor->TypeName[0]) :
+                                    std::format("{:s}::GetTypeDescriptor()", Descriptor->Fields[i].TypeDescriptor->GetTypeName()),
+                                  Descriptor->Fields[i].QualifierFlag);
     }
     for (size_t i = 0; i < Descriptor->TypeName.size(); i++)
     {
-        SourceCode += std::format("        Descriptor.TypeName.push_back(\"{:s}\");                          \n", Descriptor->TypeName[i]);
+    SourceCode += std::format("        Descriptor.TypeName.push_back(\"{:s}\");\n", Descriptor->TypeName[i]);
     }
-    SourceCode += std::format("        return &Descriptor;                                                                            \n");
-    SourceCode += std::format("    }};                                                                                                 \n");
-    SourceCode += std::format("    static FTypeDescriptor* DescriptorPtr = DescriptorInitializer();                                      \n", TypeKind, Descriptor->TypeName[0]);
-    SourceCode += std::format("    return DescriptorPtr;                                      \n", TypeKind, Descriptor->TypeName[0]);
-    SourceCode += std::format("}}\n\n");
+    SourceCode += std::format("        return &Descriptor;\n"
+                              "    }};\n"
+                              "    static FTypeDescriptor* DescriptorPtr = DescriptorInitializer();\n"
+                              "    return DescriptorPtr;\n"
+                              "}}\n\n");
+    SourceCode += std::format("struct F{0:s}DescriptorAutoRegister {{\n"
+                              "    F{0:s}DescriptorAutoRegister(){{\n"
+                              "        FTypeDescriptor* Descriptor = {0:s}::GetTypeDescriptor();\n"
+                              "        int32_t DescriptorId = {0:s}::GetTypeId();\n"
+                              "        FTypeDescriptorTable::Get().NameToId.insert(std::make_pair(\"{0:s}\", DescriptorId));\n", Descriptor->TypeName[0]);
+                                       for (size_t i = 1; i < Descriptor->TypeName.size(); i++)
+                                       {
+    SourceCode += std::format("            FTypeDescriptorTable::Get().NameToId.insert(std::make_pair(\"{0:s}\", DescriptorId));\n", Descriptor->TypeName[i]);
+                                       }
+    SourceCode += std::format("        if(FTypeDescriptorTable::Get().Descriptors.size() <= DescriptorId){{\n"
+                              "            FTypeDescriptorTable::Get().Descriptors.resize(DescriptorId + 1);\n"
+                              "        }}\n"
+                              "        FTypeDescriptorTable::Get().Descriptors[DescriptorId] = Descriptor;\n"
+                              "    }}\n"
+                              "}};\n\n"
+                              "static F{0:s}DescriptorAutoRegister {0:s}DescriptorAutoRegister;\n\n", Descriptor->TypeName[0]);
     return SourceCode;
 }
+
+

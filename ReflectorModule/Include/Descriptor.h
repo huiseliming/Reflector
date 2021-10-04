@@ -44,11 +44,33 @@ typedef double             Double;
 
 struct FTypeDescriptor;
 
+enum EQualifierFlag :Uint32
+{
+	kNoQualifierFlag = 0,
+	kPointerFlagBit = 1 << 0,
+	kReferenceFlagBit = 1 << 1,
+	kConstValueFlagBit = 1 << 2,
+	kConstPointerFlagBit = 1 << 3,
+};
+
+enum ETypeFlag :Uint32
+{
+	kNoFlag = 0,
+	kHasDefaultConstructorFlagBit = 1 << 0,
+	kHasDestructorFlagBit = 1 << 1,
+};
+
 struct FField {
 	STRING_TYPE FieldName{""};
 	size_t FieldOffset{0};
 	size_t Number{ 1 };
 	FTypeDescriptor *TypeDescriptor{nullptr};
+	Uint32 QualifierFlag{kNoQualifierFlag}; // EQualifierFlag
+	bool IsNoQualifierType() { return QualifierFlag == kNoQualifierFlag; }
+	bool IsPointerType() { return QualifierFlag & kPointerFlagBit; }
+	bool IsReferenceType() { return QualifierFlag & kReferenceFlagBit; }
+	bool IsConstValueType() { return QualifierFlag & kConstValueFlagBit; }
+	bool IsConstPointerType() { return QualifierFlag & kConstPointerFlagBit; }
 };
 
 struct FFunction {
@@ -72,6 +94,18 @@ struct FTypeDescriptor
 	virtual bool IsStruct() { return false; }
 	virtual bool IsEnum() { return false; }
 	virtual const char* GetTypeKind() = 0;
+
+	bool HasDefaultConstructor() { return TypeFlag & kHasDefaultConstructorFlagBit; }
+	//bool HasCopyConstructor() { return false; }
+	//bool HasMoveConstructor() { return false; }
+	bool HasDestructor() { return TypeFlag & kHasDestructorFlagBit; }
+
+	virtual void Constructor(void* ConstructedObject) { }
+	virtual void CopyConstructor(void* ConstructedObject, void* CopyedObject) { }
+	virtual void MoveConstructor(void* ConstructedObject, void* MoveedObject) { }
+	virtual void Destructor(void* DestructedObject) { }
+	virtual void CopyAssignmentOperator(void* LObject, void* RObject) {}
+	virtual void MoveAssignmentOperator(void* LObject, void* RObject) {}
 
 	const char * GetTypeName() 
 	{ 
@@ -97,6 +131,7 @@ struct FTypeDescriptor
 	size_t TypeSize{ 0 };
 	std::vector<FField> Fields;
 	std::unordered_map<std::string, FFunction> Functions;
+	Uint32 TypeFlag{ kNoFlag }; // ETypeFlag
 
 #ifdef REFLECT_CODE_GENERATOR
 	std::string DeclaredFile;
