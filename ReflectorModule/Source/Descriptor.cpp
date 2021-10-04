@@ -100,6 +100,24 @@ FTypeDescriptorTable& FTypeDescriptorTable::Get()
 #ifdef REFLECT_CODE_GENERATOR
 		TypeDescriptorTable.RegisterDescriptor("_Bool", GBoolDescriptor.get());
 #endif
+		struct FStdStringDescriptor : public FClassDescriptor {
+			FStdStringDescriptor(const char* InTypeName, size_t InTypeSize = 0)
+				: FClassDescriptor(InTypeName, InTypeSize)
+			{}
+			virtual void* New() override { return new std::string(); }
+			virtual void Delete(void* Object) override { delete (std::string*)Object; }
+			virtual void Constructor(void* ConstructedObject) { new (ConstructedObject) std::basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
+			virtual void Destructor(void* DestructedObject) { reinterpret_cast<std::string*>(DestructedObject)->~basic_string<char, std::char_traits<char>, std::allocator<char>>(); }
+		};
+		static FStdStringDescriptor StdStringDescriptor("std::string", sizeof(std::string));
+		StdStringDescriptor.TypeFlag = 0x00000003;
+		TypeDescriptorTable.RegisterDescriptor("std::string", &StdStringDescriptor);
+		static FClassDescriptor Reserve1Descriptor("Reserve1", 1);
+		TypeDescriptorTable.RegisterDescriptor("Reserve1", &Reserve1Descriptor);
+		static FClassDescriptor Reserve2Descriptor("Reserve2", 2);
+		TypeDescriptorTable.RegisterDescriptor("Reserve2", &Reserve2Descriptor);
+		static FClassDescriptor Reserve3Descriptor("Reserve3", 3);
+		TypeDescriptorTable.RegisterDescriptor("Reserve3", &Reserve3Descriptor);
 		return &TypeDescriptorTable;
 	};
 	static FTypeDescriptorTable* TypeDescriptorTable = TypeDescriptorTableInitializer();

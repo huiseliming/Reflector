@@ -100,6 +100,8 @@ struct FTypeDescriptor
 	//bool HasMoveConstructor() { return false; }
 	bool HasDestructor() { return TypeFlag & kHasDestructorFlagBit; }
 
+	virtual void* New() { return nullptr; }
+	virtual void Delete(void* Object) { }
 	virtual void Constructor(void* ConstructedObject) { }
 	virtual void CopyConstructor(void* ConstructedObject, void* CopyedObject) { }
 	virtual void MoveConstructor(void* ConstructedObject, void* MoveedObject) { }
@@ -165,8 +167,8 @@ struct FBuiltInTypeDescriptor : public FTypeDescriptor {
 	FBuiltInTypeDescriptor(const char* InTypeName, size_t InTypeSize = 0)
 		: FTypeDescriptor(InTypeName, InTypeSize)
 	{}
-	virtual bool IsBuiltInType() { return true; }
-	virtual const char* GetTypeKind() { return "builtIn"; }
+	virtual bool IsBuiltInType() override { return true; }
+	virtual const char* GetTypeKind() override { return "builtIn"; }
 };
 
 struct FClassDescriptor : public FTypeDescriptor
@@ -174,8 +176,8 @@ struct FClassDescriptor : public FTypeDescriptor
 	FClassDescriptor(const char* InTypeName, size_t InTypeSize = 0)
 		: FTypeDescriptor(InTypeName, InTypeSize)
 	{}
-	virtual bool IsClass() { return true; }
-	virtual const char* GetTypeKind() { return "class"; }
+	virtual bool IsClass() override { return true; }
+	virtual const char* GetTypeKind() override { return "class"; }
 };
 
 struct FStructDescriptor : public FTypeDescriptor
@@ -183,8 +185,8 @@ struct FStructDescriptor : public FTypeDescriptor
 	FStructDescriptor(const char* InTypeName, size_t InTypeSize = 0)
 		: FTypeDescriptor(InTypeName, InTypeSize)
 	{}
-	virtual bool IsStruct() { return true; }
-	virtual const char* GetTypeKind() { return "struct"; }
+	virtual bool IsStruct() override { return true; }
+	virtual const char* GetTypeKind() override { return "struct"; }
 };
 
 struct FEnumDescriptor : public FTypeDescriptor
@@ -192,8 +194,8 @@ struct FEnumDescriptor : public FTypeDescriptor
 	FEnumDescriptor(const char* InTypeName, size_t InTypeSize = 0)
 		: FTypeDescriptor(InTypeName, InTypeSize)
 	{}
-	virtual bool IsEnum() { return true; }
-	virtual const char* GetTypeKind() { return "enum"; }
+	virtual bool IsEnum() override { return true; }
+	virtual const char* GetTypeKind() override { return "enum"; }
 };
 
 extern std::unique_ptr<FTypeDescriptor> GVoidDescriptor;
