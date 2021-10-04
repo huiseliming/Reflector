@@ -92,6 +92,33 @@ public:
                 UserDeclaredDefaultConstructor = Constructor;
             }
             if (!FindReflectAnnotation(Method, "Function", ReflectAnnotation)) continue;
+            TypeDescriptor->Functions.push_back(FFunction());
+            FFunction& Function = TypeDescriptor->Functions.back();
+            Function.FunctionName = Method->getNameAsString();
+            (void)Function.Ptr;
+            Function.OwnerDescriptor = TypeDescriptor;
+            Function.FunctionFlag |= kMemberFlagBit;
+            if(Method->isStatic())
+            {
+                Function.FunctionFlag |= kStaticFlagBit;
+            }
+            QualType ReturnType = Method->getReturnType();
+            if(ReturnType->isVoidType()){
+                Function.Ret.TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(0);
+                Function.Ret.QualifierFlag = kQualifierNoFlag;
+            }else{
+                Function.Ret.TypeDescriptor;
+                Function.Ret.QualifierFlag;
+            }
+            for (auto ParamIterator = Method->param_begin(); ParamIterator != Method->param_end(); ParamIterator++)
+            {
+                Function.Args.push_back(FParameter());
+                FParameter& Parameter = Function.Args.back();
+                Parameter.ParameterName = (*ParamIterator)->getNameAsString();
+                Parameter.TypeDescriptor;
+                Parameter.QualifierFlag;
+            }
+
         }
 
         // check constructor and destructor 

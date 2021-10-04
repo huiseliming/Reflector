@@ -46,7 +46,7 @@ struct FTypeDescriptor;
 
 enum EQualifierFlag :Uint32
 {
-	kNoQualifierFlag = 0,
+	kQualifierNoFlag = 0,
 	kPointerFlagBit = 1 << 0,
 	kReferenceFlagBit = 1 << 1,
 	kConstValueFlagBit = 1 << 2,
@@ -55,29 +55,54 @@ enum EQualifierFlag :Uint32
 
 enum ETypeFlag :Uint32
 {
-	kNoFlag = 0,
+	kTypeNoFlag = 0,
 	kHasDefaultConstructorFlagBit = 1 << 0,
 	kHasDestructorFlagBit = 1 << 1,
 };
 
-struct FField {
-	STRING_TYPE FieldName{""};
-	size_t FieldOffset{0};
-	size_t Number{ 1 };
-	FTypeDescriptor *TypeDescriptor{nullptr};
-	Uint32 QualifierFlag{kNoQualifierFlag}; // EQualifierFlag
-	bool IsNoQualifierType() { return QualifierFlag == kNoQualifierFlag; }
+enum EFunctionFlag :Uint32
+{
+	kFunctionNoFlag = 0,
+	kMemberFlagBit,
+	kStaticFlagBit,
+};
+
+struct FDecl 
+{
+	FTypeDescriptor* TypeDescriptor{ nullptr };
+	Uint32 QualifierFlag{ kQualifierNoFlag }; // EQualifierFlag
+	bool IsNoQualifierType() { return QualifierFlag == kQualifierNoFlag; }
 	bool IsPointerType() { return QualifierFlag & kPointerFlagBit; }
 	bool IsReferenceType() { return QualifierFlag & kReferenceFlagBit; }
 	bool IsConstValueType() { return QualifierFlag & kConstValueFlagBit; }
 	bool IsConstPointerType() { return QualifierFlag & kConstPointerFlagBit; }
 };
 
+struct FField : public FDecl
+{
+	STRING_TYPE FieldName{""};
+	size_t FieldOffset{0};
+	size_t Number{ 1 };
+};
+
+struct FParameter : public FDecl {
+	STRING_TYPE ParameterName{ "" };
+};
+
+struct FReturnValue : public FDecl {
+
+};
+
 struct FFunction {
-	STRING_TYPE FieldName{nullptr};
+	STRING_TYPE FunctionName{""};
 	void *Ptr{nullptr};
-	FField Ret;
-	std::vector<FField> Args;
+	FTypeDescriptor* OwnerDescriptor{nullptr}; //  Owner {Class | Struct} TypeDescriptor
+	FReturnValue Ret;
+	std::vector<FParameter> Args;
+	Uint32 FunctionFlag{ kFunctionNoFlag }; //EFunctionFlag
+	bool IsStaticMemberFunction() { return FunctionFlag & (kMemberFlagBit | kStaticFlagBit); }
+	bool IsMemberFunction() { return FunctionFlag & kMemberFlagBit; }
+	bool IsStaticFunction() { return FunctionFlag & kStaticFlagBit; }
 };
 
 struct FTypeDescriptor 
@@ -132,8 +157,8 @@ struct FTypeDescriptor
 	std::vector<STRING_TYPE> TypeName;
 	size_t TypeSize{ 0 };
 	std::vector<FField> Fields;
-	std::unordered_map<std::string, FFunction> Functions;
-	Uint32 TypeFlag{ kNoFlag }; // ETypeFlag
+	std::vector<FFunction> Functions;
+	Uint32 TypeFlag{ kTypeNoFlag }; // ETypeFlag
 
 #ifdef REFLECT_CODE_GENERATOR
 	std::string DeclaredFile;
