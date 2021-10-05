@@ -60,7 +60,7 @@ public:
         if (TypeDescriptor) return TypeDescriptor;
         if (!CXXDecl->hasAttrs()) return nullptr;
         if(!FindReflectAnnotation(CXXDecl, "Object", ReflectAnnotation)) return nullptr;
-        CXXDecl->dump();
+        //CXXDecl->dump();
         if(CXXDecl->isClass()){
             CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FClassDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
         } else if(CXXDecl->isStruct()){
