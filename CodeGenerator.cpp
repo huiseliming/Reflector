@@ -150,7 +150,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FTypeDescriptor* Descriptor)
                               "        Descriptor.Fields[{0:d}].Number = {3:d};\n"
                               "        Descriptor.Fields[{0:d}].TypeDescriptor = {4:s}\n"
                               "        Descriptor.Fields[{0:d}].QualifierFlag = {5:#010x};\n", i, Descriptor->Fields[i].FieldName, Descriptor->TypeName[0], Descriptor->Fields[i].Number, 
-                                Descriptor->Fields[i].TypeDescriptor->IsBuiltInType() ? 
+                                (Descriptor->Fields[i].TypeDescriptor->IsBuiltInType() || (Descriptor->Fields[i].TypeDescriptor->TypeId < ReserveObjectIdEnd)) ?
                                 std::format("FTypeDescriptorTable::Get().GetDescriptor({:d}); //{:s}", Descriptor->Fields[i].TypeDescriptor->TypeId, Descriptor->Fields[i].TypeDescriptor->TypeName[0]) :
                                 std::format("{:s}::GetTypeDescriptor()", Descriptor->Fields[i].TypeDescriptor->GetTypeName()),
                                 Descriptor->Fields[i].QualifierFlag);

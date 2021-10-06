@@ -56,6 +56,7 @@ int main(int argc, const char **argv) {
         -> CommandLineArguments
         {
             auto NewCmdArg = CmdArg;
+            NewCmdArg.erase(std::remove(NewCmdArg.begin(), NewCmdArg.end(), "/MP"), NewCmdArg.end());
             NewCmdArg.push_back("-D__REFLECTOR__");
             return NewCmdArg;
         });

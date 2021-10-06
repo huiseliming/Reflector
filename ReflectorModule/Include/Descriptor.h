@@ -236,3 +236,6 @@ extern std::unique_ptr<FTypeDescriptor> GUint64Descriptor;
 extern std::unique_ptr<FTypeDescriptor> GFloatDescriptor;
 extern std::unique_ptr<FTypeDescriptor> GDoubleDescriptor;
 extern std::unique_ptr<FTypeDescriptor> GStdStringDescriptor;
+
+extern int32_t ReserveObjectIdStart;
+extern int32_t ReserveObjectIdEnd;

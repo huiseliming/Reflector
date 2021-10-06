@@ -23,11 +23,16 @@ void SplitAnnotation(StringRef AnnotationString, std::vector<std::string>& Annot
     for (size_t i = 0; i < AnnotationString.size(); i++)
     {
         if(AnnotationString[i] == ',') {
-            Annotations.emplace_back(std::string(AnnotationString.data() + PreviousPos, i - PreviousPos));
+            std::string Str(AnnotationString.data() + PreviousPos, i - PreviousPos);
+            Str.erase(std::remove_if(Str.begin(), Str.end(), isspace), Str.end());
+            Annotations.emplace_back(Str);
             PreviousPos = i + 1;
         }
     }
-    Annotations.emplace_back(std::string(AnnotationString.data() + PreviousPos, AnnotationString.size() - PreviousPos));
+    std::string Str(AnnotationString.data() + PreviousPos, AnnotationString.size() - PreviousPos);
+    Str.erase(std::remove_if(Str.begin(), Str.end(), isspace), Str.end());
+    Annotations.emplace_back(Str);
+    
 }
 
 bool FindReflectAnnotation(Decl* CheckedDecl, const char* FoundMarkStr, std::vector<std::string>& ReflectAnnotation) {
@@ -191,21 +196,28 @@ public:
             if(FieldUnqualifiedType->isPointerType() || FieldUnqualifiedType->isReferenceType()){
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <Multi-level Pointer>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <Multi-level Pointer>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
             // unsupported The Pointer Pointer To Array
             if (FieldUnqualifiedType->isArrayType()) {
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <The Pointer Pointer To Array>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <The Pointer Pointer To Array>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
             if (FieldUnqualifiedType.isConstant(*Context)){
                 TypeDescriptor->Fields.back().QualifierFlag |= kConstValueFlagBit;
                 FieldUnqualifiedType = FieldUnqualifiedType.getUnqualifiedType();
             }
-            if (FieldUnqualifiedType->isBuiltinType())
+            // if is ReserveObject
+            auto it = std::find_if(ReflectAnnotation.begin(), ReflectAnnotation.end(), [](std::string& str) { return 0 == strncmp(str.c_str(), "ReserveObjectId", 15); });
+            if (std::end(ReflectAnnotation) != it) {
+                size_t pos = it->find_last_of("=");
+                int32_t ReserveObjectId = std::atoi(it->substr(16).c_str());
+                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(ReserveObjectId);
+            }
+            else if (FieldUnqualifiedType->isBuiltinType())
             {
-                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(FieldUnqualifiedType.getAsString().c_str());
+                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
             }
             else if(FieldUnqualifiedType->isStructureOrClassType()|| FieldUnqualifiedType->isEnumeralType())
             {
@@ -215,14 +227,14 @@ public:
                 }else{
                     SourceRange Loc = Field->getSourceRange();
                     PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                    llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                    llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
                 }
             }
             else
             {
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <Union>", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <Union>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
             assert(TypeDescriptor->Fields.back().TypeDescriptor != nullptr);
         }

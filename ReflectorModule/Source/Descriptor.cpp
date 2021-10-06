@@ -24,6 +24,8 @@ std::unique_ptr<FTypeDescriptor> GUint64Descriptor;
 std::unique_ptr<FTypeDescriptor> GFloatDescriptor ;
 std::unique_ptr<FTypeDescriptor> GDoubleDescriptor;
 
+int32_t ReserveObjectIdStart = 32;
+int32_t ReserveObjectIdEnd = 128;
 
 std::string FTypeDescriptor::Dump()
 {
@@ -100,6 +102,15 @@ FTypeDescriptorTable& FTypeDescriptorTable::Get()
 #ifdef REFLECT_CODE_GENERATOR
 		TypeDescriptorTable.RegisterDescriptor("_Bool", GBoolDescriptor.get());
 #endif
+		static std::vector<std::unique_ptr<FTypeDescriptor>> ReserveObjectDescriptor; //("ReserveObject", )
+		int32_t CurrentId = TypeDescriptorTable.IdCounter;
+		for (int32_t i = CurrentId; i < ReserveObjectIdStart; i++)
+		{
+			std::string ReserveObjectIndexName = std::format("ReserveObject{:d}", i);
+			ReserveObjectDescriptor.push_back(std::make_unique<FClassDescriptor>(ReserveObjectIndexName.c_str(), i));
+			TypeDescriptorTable.RegisterDescriptor(ReserveObjectIndexName.c_str(), ReserveObjectDescriptor.back().get());
+		}
+
 		struct FStdStringDescriptor : public FClassDescriptor {
 			FStdStringDescriptor(const char* InTypeName, size_t InTypeSize = 0)
 				: FClassDescriptor(InTypeName, InTypeSize)
@@ -112,12 +123,14 @@ FTypeDescriptorTable& FTypeDescriptorTable::Get()
 		static FStdStringDescriptor StdStringDescriptor("std::string", sizeof(std::string));
 		StdStringDescriptor.TypeFlag = 0x00000003;
 		TypeDescriptorTable.RegisterDescriptor("std::string", &StdStringDescriptor);
-		static FClassDescriptor Reserve1Descriptor("Reserve1", 1);
-		TypeDescriptorTable.RegisterDescriptor("Reserve1", &Reserve1Descriptor);
-		static FClassDescriptor Reserve2Descriptor("Reserve2", 2);
-		TypeDescriptorTable.RegisterDescriptor("Reserve2", &Reserve2Descriptor);
-		static FClassDescriptor Reserve3Descriptor("Reserve3", 3);
-		TypeDescriptorTable.RegisterDescriptor("Reserve3", &Reserve3Descriptor);
+
+		CurrentId = TypeDescriptorTable.IdCounter;
+		for (int32_t i = CurrentId; i < ReserveObjectIdEnd; i++)
+		{
+			std::string ReserveObjectIndexName = std::format("ReserveObject{:d}", i);
+			ReserveObjectDescriptor.push_back(std::make_unique<FClassDescriptor>(ReserveObjectIndexName.c_str(), i));
+			TypeDescriptorTable.RegisterDescriptor(ReserveObjectIndexName.c_str(), ReserveObjectDescriptor.back().get());
+		}
 		return &TypeDescriptorTable;
 	};
 	static FTypeDescriptorTable* TypeDescriptorTable = TypeDescriptorTableInitializer();
