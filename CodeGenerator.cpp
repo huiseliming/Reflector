@@ -91,7 +91,7 @@ bool CCodeGenerator::Generate()
                 llvm::outs() << std::format("File<{:s}> generated\n", GeneratedHeaderFile);
                 llvm::outs() << std::format("File<{:s}> generated\n", GeneratedSourceFile);
                 std::string HeaderFileBegin = "#pragma once\n\n";
-                std::string SourceFileBegin = "#include \"" + Filename + "\"\n\n";
+                std::string SourceFileBegin = "#include \"" + std::filesystem::path(DeclaredFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n\n";
                 GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
                 GeneratedFileContextMap[Descriptors[i]->DeclaredFile].GeneratedSourceFile.write(SourceFileBegin.data(), SourceFileBegin.size());
             }

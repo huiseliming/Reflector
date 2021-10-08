@@ -57,7 +57,31 @@ int main(int argc, const char **argv) {
         {
             auto NewCmdArg = CmdArg;
             NewCmdArg.erase(std::remove(NewCmdArg.begin(), NewCmdArg.end(), "/MP"), NewCmdArg.end());
-            NewCmdArg.push_back("-D__REFLECTOR__");
+            std::vector<std::string> AddArgs;
+            //AddArgs.push_back("-Wdeprecated-enum-enum-conversion");
+            //AddArgs.push_back("-Wpessimizing-move");
+            //AddArgs.push_back("-Wunused-const-variable");
+            std::for_each(NewCmdArg.begin(), NewCmdArg.end(), [&](std::string& Str) {
+                if (0 == strncmp(Str.data(), "/W", 2)) {
+                    if (Str[2] == '3' || Str[2] == '4') {
+                        Str[2] = '0';
+                    }
+                }
+                for (auto Iterator = AddArgs.begin(); Iterator != AddArgs.end(); ) {
+                    if (Str == *Iterator) {
+                        Iterator = AddArgs.erase(Iterator);
+                    }
+                    else {
+                        Iterator++;
+                    }
+                }
+            });
+            std::for_each(AddArgs.begin(), AddArgs.end(), [&] (std::string& Str) { NewCmdArg.insert(++NewCmdArg.begin(),Str); });
+            NewCmdArg.insert(++NewCmdArg.begin(), "-D__REFLECTOR__");
+            for (size_t i = 0; i < NewCmdArg.size(); i++) {
+                llvm::outs() << NewCmdArg[i] << " ";
+            }
+            llvm::outs() << "\n";
             return NewCmdArg;
         });
     int Result = Tool.run(newFrontendActionFactory<FindCXXDeclAction>().get());

@@ -1,14 +1,14 @@
 #include "Descriptor.h"
-#ifdef __REFLECTOR__ // reflector using clang, c++23 std::format not impl
-namespace std {
-	template <class... _Types>
-	string format(const string_view _Fmt, const _Types&... _Args) {
-		return {};
-	}
-}
-#else
+// #ifdef __REFLECTOR__ // reflector using clang, c++23 std::format not impl
+// namespace std {
+// 	template <class... _Types>
+// 	string format(const string_view _Fmt, const _Types&... _Args) {
+// 		return {};
+// 	}
+// }
+// #else
 #include <format>
-#endif
+// #endif
 
 #define MAKE_BUILT_IN_TYPE_DESCRIPTOR(BuiltInType) FBuiltInTypeDescriptor(#BuiltInType, sizeof(BuiltInType))
 std::unique_ptr<FTypeDescriptor> GVoidDescriptor  ;

@@ -39,42 +39,11 @@ target_include_directories(Example PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/Reflect)
 
 foreach(SourceFile ${Source})
-    set(SourceFileInput ${SourceFileInput} ${SourceFile})    
+    set(SourceFileInput "${SourceFileInput} ${SourceFile}")
 endforeach()
 
-get_target_property(CompileDefinitions Example COMPILE_DEFINITIONS)
-if(CompileDefinitions)
-    foreach(CompileDefine ${CompileDefinitions})
-        set(CompileDefinitionsInput ${CompileDefinitionsInput} -D${CompileDefine})
-    endforeach()
-endif()
-set(CompileDefinitionsInput ${CompileDefinitionsInput} -D__REFLECTOR__)
+set(ReflectorExecutor Reflector.exe)
+set(ReflectorExecuteCommand "${ReflectorExecutor} -p ${PROJECT_BINARY_DIR} ${SourceFileInput}")
 
-get_target_property(IncludeDirectories Example INCLUDE_DIRECTORIES)
-foreach(IncludeDirectory ${IncludeDirectories})
-    set(IncludeDirectoryInput ${IncludeDirectoryInput} $<$<BOOL:${IncludeDirectory}>:-I${IncludeDirectory}>) 
-endforeach()
-
-set(ReflectorExecutor ${PROJECT_SOURCE_DIR}/Binary/Reflector.exe)
-set(ReflectorExecuteCommand 
-    ${ReflectorExecutor} 
-    ${SourceFileInput}
-    -- -std=c++20 ${CompileDefinitionsInput} ${IncludeDirectoryInput})
-
-
-message("----------ReflectorCommand----------")
-message(${ReflectorExecuteCommand})
-message("------------------------------------")
-#execute_process(COMMAND ${MetadataGeneratorCommand})
-
-message(${PROJECT_SOURCE_DIR})
-add_custom_target (ExampleReflector)
-add_custom_command(TARGET ExampleReflector 
-    COMMAND ${ReflectorExecuteCommand}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Reflect
-)
-
-#add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Reflector.txt COMMAND ${ReflectorExecuteCommand} WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/Reflect)
-#add_custom_target(TestsReflector DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Reflector.txt)
-
-#add_dependencies(Tests TestsReflector)
+file(GENERATE OUTPUT "${PROJECT_SOURCE_DIR}/Scripts/reflector.bat"
+    CONTENT "cd ${PROJECT_SOURCE_DIR}/Reflect && ${ReflectorExecuteCommand}")
