@@ -10,7 +10,31 @@
 #include <format>
 // #endif
 
-#define MAKE_BUILT_IN_TYPE_DESCRIPTOR(BuiltInType) FBuiltInTypeDescriptor(#BuiltInType, sizeof(BuiltInType))
+#define MAKE_BUILT_IN_TYPE_DESCRIPTOR(BuiltInTypeName, BuiltInType, IsUnsigned) \
+struct F##BuiltInTypeName##TypeDescriptor : public FBuiltInTypeDescriptor \
+{\
+	F##BuiltInTypeName##TypeDescriptor() \
+		: FBuiltInTypeDescriptor(#BuiltInType, sizeof(BuiltInType)) \
+	{}\
+	virtual bool IsUnsignedType() { return IsUnsigned; }\
+	virtual void* New() { return new BuiltInType; }\
+	virtual void Delete(void* Object) { delete (BuiltInType*)Object; }\
+}\
+
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Bool, bool, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Int8, char, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Uint8, unsigned char, true);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Int16, short, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Uint16, unsigned short, true);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Int32, int, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Uint32, unsigned int, true);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Int64, long long, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Uint64, unsigned long long, true);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Float, float, false);
+MAKE_BUILT_IN_TYPE_DESCRIPTOR(Double, double, false);
+
+//#define MAKE_BUILT_IN_TYPE_DESCRIPTOR(BuiltInTypeName, BuiltInType) FBuiltInTypeDescriptor(#BuiltInType, sizeof(BuiltInType))
+
 std::unique_ptr<FTypeDescriptor> GVoidDescriptor  ;
 std::unique_ptr<FTypeDescriptor> GBoolDescriptor  ;
 std::unique_ptr<FTypeDescriptor> GInt8Descriptor  ;
@@ -56,18 +80,17 @@ FTypeDescriptorTable& FTypeDescriptorTable::Get()
 {
 	static std::function<FTypeDescriptorTable* ()> TypeDescriptorTableInitializer = []() -> FTypeDescriptorTable* {
 		static FTypeDescriptorTable TypeDescriptorTable;
-		GVoidDescriptor   = std::move(std::unique_ptr<FTypeDescriptor>(new FBuiltInTypeDescriptor("void")));
-		GBoolDescriptor   = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(bool)));
-		GInt8Descriptor   = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(char)));
-		GUint8Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(unsigned char)));
-		GInt16Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(short)));
-		GUint16Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(unsigned short)));
-		GInt32Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(int)));
-		GUint32Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(unsigned int)));
-		GInt64Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(long long)));
-		GUint64Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(unsigned long long)));
-		GFloatDescriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(float)));
-		GDoubleDescriptor = std::move(std::unique_ptr<FTypeDescriptor>(new MAKE_BUILT_IN_TYPE_DESCRIPTOR(double)));
+		GBoolDescriptor   = std::move(std::unique_ptr<FTypeDescriptor>(new FBoolTypeDescriptor  ()));
+		GInt8Descriptor   = std::move(std::unique_ptr<FTypeDescriptor>(new FInt8TypeDescriptor  ()));
+		GUint8Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new FUint8TypeDescriptor ()));
+		GInt16Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new FInt16TypeDescriptor ()));
+		GUint16Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new FUint16TypeDescriptor()));
+		GInt32Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new FInt32TypeDescriptor ()));
+		GUint32Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new FUint32TypeDescriptor()));
+		GInt64Descriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new FInt64TypeDescriptor ()));
+		GUint64Descriptor = std::move(std::unique_ptr<FTypeDescriptor>(new FUint64TypeDescriptor()));
+		GFloatDescriptor  = std::move(std::unique_ptr<FTypeDescriptor>(new FFloatTypeDescriptor ()));
+		GDoubleDescriptor = std::move(std::unique_ptr<FTypeDescriptor>(new FDoubleTypeDescriptor()));
 		// Register built-in type
 		GVoidDescriptor->TypeId = TypeDescriptorTable.IdCounter++;
 		TypeDescriptorTable.Descriptors.push_back(GVoidDescriptor.get());

@@ -83,6 +83,15 @@ struct FField : public FDecl
 	STRING_TYPE FieldName{""};
 	size_t FieldOffset{0};
 	size_t Number{ 1 };
+
+	template<typename T>
+	T& GetRef(void* OwnerBaseAddress) { return *reinterpret_cast<T*>(((Uint8*)OwnerBaseAddress) + FieldOffset); }
+	template<typename T>
+	T* GetPtr(void* OwnerBaseAddress) { return reinterpret_cast<T*>(((Uint8*)OwnerBaseAddress) + FieldOffset); }
+	template<typename T>
+	const T& GetCRef(void* OwnerBaseAddress) { return GetRef<T>(OwnerBaseAddress); }
+	template<typename T>
+	const T* GetCPtr(void* OwnerBaseAddress) { return GetPtr<T>(OwnerBaseAddress); }
 };
 
 struct FParameter : public FDecl {
@@ -113,7 +122,23 @@ struct FTypeDescriptor
 	{
 	}
 	virtual ~FTypeDescriptor() {}
-	static std::unordered_map<std::string, FTypeDescriptor> TypeDescriptorTable;
+
+	// BuiltInTypeBegin
+	bool IsVoidType() { return TypeId == 0; }
+	bool IsBoolType() { return TypeId == 1; }
+	bool IsInt8Type() { return TypeId == 2; }
+	bool IsUint8Type() { return TypeId == 3; }
+	bool IsInt16Type() { return TypeId == 4; }
+	bool IsUint16Type() { return TypeId == 5; }
+	bool IsInt32Type() { return TypeId == 6; }
+	bool IsUint32Type() { return TypeId == 7; }
+	bool IsInt64Type() { return TypeId == 8; }
+	bool IsUint64Type() { return TypeId == 9; }
+	bool IsFloatType() { return TypeId == 10; }
+	bool IsDoubleType() { return TypeId == 11; }
+	// BuiltInTypeBegin
+
+	virtual bool IsUnsignedType() { return false; }
 	virtual bool IsBuiltInType() { return false; }
 	virtual bool IsClass() { return false; }
 	virtual bool IsStruct() { return false; }
@@ -155,6 +180,7 @@ struct FTypeDescriptor
 	std::string Dump();
 
 	std::vector<STRING_TYPE> TypeName;
+	int32_t TypeId{ 0 };
 	size_t TypeSize{ 0 };
 	std::vector<FField> Fields;
 	std::vector<FFunction> Functions;
@@ -170,7 +196,6 @@ protected:
 		assert(!HasTypeName(InTypeName));
 		TypeName.push_back(InTypeName);
 	}
-	int32_t TypeId{0};
 };
 
 struct FTypeDescriptorTable {
