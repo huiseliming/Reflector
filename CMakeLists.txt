@@ -4,6 +4,7 @@ add_clang_executable(Reflector
   Reflector.cpp
   CodeGenerator.cpp
   ReflectorModule/Source/Descriptor.cpp
+  Reflect.cpp
   )
 
 target_link_libraries(Reflector

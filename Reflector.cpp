@@ -22,9 +22,10 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 // A help message for this specific tool can be added afterwards.
 static cl::extrahelp MoreHelp("\nMore help text...\n");
 
+
 int main(int argc, const char **argv) {
     std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
-    llvm::outs() << "Start parsing reflect object\n";
+    
     auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory, cl::NumOccurrencesFlag::OneOrMore);
     if (!ExpectedParser) {
         // Fail gracefully for unsupported options.
@@ -44,11 +45,16 @@ int main(int argc, const char **argv) {
     //        llvm::outs() << CompileCommands[j].CommandLine[k] << " ";
     //        }
     //        llvm::outs() << "\n";
-    //        //llvm::outs() << "  Directory   : " << CompileCommands[j].Directory << "\n";
-    //        //llvm::outs() << "  Filename    : " << CompileCommands[j].Filename << "\n";
-    //        //llvm::outs() << "  Heuristic   : " << CompileCommands[j].Heuristic << "\n";
+    //        llvm::outs() << "  Directory   : " << CompileCommands[j].Directory << "\n";
+    //        llvm::outs() << "  Filename    : " << CompileCommands[j].Filename << "\n";
+    //        llvm::outs() << "  Heuristic   : " << CompileCommands[j].Heuristic << "\n";
     //    }
     //}
+    std::vector<CompileCommand> CompileCommands = OptionsParser.getCompilations().getAllCompileCommands();
+    if(CompileCommands.size() > 0)
+    {
+        CCodeGenerator::Get().BuildPath = CompileCommands[0].Directory;
+    }
     OptionsParser.getArgumentsAdjuster();
     ClangTool Tool(OptionsParser.getCompilations(),
                     OptionsParser.getSourcePathList());
@@ -61,11 +67,11 @@ int main(int argc, const char **argv) {
             //AddArgs.push_back("-Wdeprecated-enum-enum-conversion");
             //AddArgs.push_back("-Wpessimizing-move");
             //AddArgs.push_back("-Wunused-const-variable");
+            bool NoWarningIsSet = false;;
             std::for_each(NewCmdArg.begin(), NewCmdArg.end(), [&](std::string& Str) {
                 if (0 == strncmp(Str.data(), "/W", 2)) {
-                    if (Str[2] == '3' || Str[2] == '4') {
-                        Str[2] = '0';
-                    }
+                    Str[2] = '0';
+                    NoWarningIsSet = true;
                 }
                 for (auto Iterator = AddArgs.begin(); Iterator != AddArgs.end(); ) {
                     if (Str == *Iterator) {
@@ -78,6 +84,9 @@ int main(int argc, const char **argv) {
             });
             std::for_each(AddArgs.begin(), AddArgs.end(), [&] (std::string& Str) { NewCmdArg.insert(++NewCmdArg.begin(),Str); });
             NewCmdArg.insert(++NewCmdArg.begin(), "-D__REFLECTOR__");
+            if(!NoWarningIsSet){
+                NewCmdArg.insert(++NewCmdArg.begin(), "/W0");
+            }
             for (size_t i = 0; i < NewCmdArg.size(); i++) {
                 llvm::outs() << NewCmdArg[i] << " ";
             }

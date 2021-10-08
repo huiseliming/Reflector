@@ -11,11 +11,12 @@
 #include "llvm/Support/raw_ostream.h"
 #include "clang/AST/RecordLayout.h"
 #include <unordered_map>
-#include "Descriptor.h"
+#include "Reflect.h"
 #include "CodeGenerator.h"
+#include <filesystem>
 
 using namespace clang;
-
+extern std::string BuildPath;
 void SplitAnnotation(StringRef AnnotationString, std::vector<std::string>& Annotations)
 {
     Annotations.clear();
@@ -58,20 +59,18 @@ public:
     {
     }
 
-    FTypeDescriptor* ParseToDescriptor(CXXRecordDecl* CXXDecl)
+    FClass* ParseToClass(CXXRecordDecl* CXXDecl)
     {
         std::vector<std::string> ReflectAnnotation;
-        FTypeDescriptor* TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(CXXDecl->getQualifiedNameAsString().c_str());
-        if (TypeDescriptor) return TypeDescriptor;
+        FClass* Class = FClassTable::Get().GetClass(CXXDecl->getQualifiedNameAsString().c_str());
+        if (Class) return Class;
         if (!CXXDecl->hasAttrs()) return nullptr;
         if(!FindReflectAnnotation(CXXDecl, "Object", ReflectAnnotation)) return nullptr;
         //CXXDecl->dump();
         if(CXXDecl->isClass()){
-            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FClassDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
         } else if(CXXDecl->isStruct()){
-            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FStructDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
         }else if(CXXDecl->isEnum()){
-            CCodeGenerator::Get().Descriptors.emplace_back(std::make_unique<FEnumDescriptor>(CXXDecl->getQualifiedNameAsString().c_str()));
+            //CCodeGenerator::Get().Classes.emplace_back(std::make_unique<FClass>(CXXDecl->getQualifiedNameAsString().c_str()));
         } else if(CXXDecl->isUnion()){
             SourceRange Loc = CXXDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
@@ -83,8 +82,14 @@ public:
             llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), CXXDecl->getQualifiedNameAsString());
             return nullptr;
         }
+        CCodeGenerator::Get().Classes.emplace_back(std::make_unique<FClass>());
+        CCodeGenerator::Get().Classes.back()->Name = CXXDecl->getQualifiedNameAsString().c_str();
+        Class = CCodeGenerator::Get().Classes.back().get();
 
-        TypeDescriptor = CCodeGenerator::Get().Descriptors.back().get();
+        for (auto BasesIterator = CXXDecl->bases_begin(); BasesIterator != CXXDecl->bases_end(); BasesIterator++)
+        {
+            Class->ParentClassName.push_back(BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString());
+        }
 
         // Function parse
         CXXConstructorDecl* UserDeclaredDefaultConstructor = nullptr;
@@ -97,31 +102,31 @@ public:
                 UserDeclaredDefaultConstructor = Constructor;
             }
             if (!FindReflectAnnotation(Method, "Function", ReflectAnnotation)) continue;
-            TypeDescriptor->Functions.push_back(FFunction());
-            FFunction& Function = TypeDescriptor->Functions.back();
-            Function.FunctionName = Method->getNameAsString();
+            Class->Functions.push_back(FFunction());
+            FFunction& Function = Class->Functions.back();
+            Function.Name = Method->getNameAsString();
             (void)Function.Ptr;
-            Function.OwnerDescriptor = TypeDescriptor;
-            Function.FunctionFlag |= kMemberFlagBit;
+            Function.OwnerClass = Class;
+            Function.Flag |= kMemberFlagBit;
             if(Method->isStatic())
             {
-                Function.FunctionFlag |= kStaticFlagBit;
+                Function.Flag |= kStaticFlagBit;
             }
             QualType ReturnType = Method->getReturnType();
             if(ReturnType->isVoidType()){
-                Function.Ret.TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(0);
-                Function.Ret.QualifierFlag = kQualifierNoFlag;
+                Function.Ret.Class = FClassTable::Get().GetClass("void");
+                Function.Ret.Flag = kQualifierNoFlag;
             }else{
-                Function.Ret.TypeDescriptor;
-                Function.Ret.QualifierFlag;
+                Function.Ret.Class;
+                Function.Ret.Flag;
             }
             for (auto ParamIterator = Method->param_begin(); ParamIterator != Method->param_end(); ParamIterator++)
             {
                 Function.Args.push_back(FParameter());
                 FParameter& Parameter = Function.Args.back();
-                Parameter.ParameterName = (*ParamIterator)->getNameAsString();
-                Parameter.TypeDescriptor;
-                Parameter.QualifierFlag;
+                Parameter.Name = (*ParamIterator)->getNameAsString();
+                Parameter.Class;
+                Parameter.Flag;
             }
 
         }
@@ -129,34 +134,33 @@ public:
         // check constructor and destructor 
         if(UserDeclaredDefaultConstructor){
             if (!UserDeclaredDefaultConstructor->isDeleted())
-                TypeDescriptor->TypeFlag |= kHasDefaultConstructorFlagBit;
+                Class->Flag |= kHasDefaultConstructorFlagBit;
         }else{
             if (CXXDecl->hasDefaultConstructor()) {
-                TypeDescriptor->TypeFlag |= kHasDefaultConstructorFlagBit;
+                Class->Flag |= kHasDefaultConstructorFlagBit;
             }
         }
         auto Destructor = CXXDecl->getDestructor();
         if(Destructor){
             if(!Destructor->isDeleted()) 
-                TypeDescriptor->TypeFlag |= kHasDestructorFlagBit;
+                Class->Flag |= kHasDestructorFlagBit;
         }else{
             if(CXXDecl->hasSimpleDestructor())
-                TypeDescriptor->TypeFlag |= kHasDestructorFlagBit;
+                Class->Flag |= kHasDestructorFlagBit;
         }
-
         // Field parse
         SourceRange Loc = CXXDecl->getSourceRange();
-        TypeDescriptor->DeclaredFile = Context->getSourceManager().getFilename(Loc.getBegin());
-        FTypeDescriptorTable::Get().RegisterDescriptor(CXXDecl->getQualifiedNameAsString().c_str(), TypeDescriptor);
+        Class->DeclaredFile = std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + Context->getSourceManager().getFilename(Loc.getBegin()).str()).string();
+        FClassTable::Get().RegisterClass(CXXDecl->getQualifiedNameAsString().c_str(), Class);
         const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(CXXDecl);
         for (auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
         {
             if (!FindReflectAnnotation(*Field, "Property", ReflectAnnotation)) continue;
             QualType FieldType = Field->getType();
             QualType FieldUnqualifiedType = Field->getType();
-            TypeDescriptor->Fields.push_back(FField());
-            TypeDescriptor->Fields.back().FieldName = Field->getName().str();
-            TypeDescriptor->Fields.back().FieldOffset = RecordLayout.getFieldOffset(Field->getFieldIndex());
+            Class->Fields.push_back(FField());
+            Class->Fields.back().Name = Field->getName().str();
+            Class->Fields.back().Offset = RecordLayout.getFieldOffset(Field->getFieldIndex());
             // if is array
             if(FieldType->isArrayType()){
                 TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(FieldType.getTypePtr());
@@ -169,7 +173,7 @@ public:
                     CheckedType = ArrayElementType;
                 }
                 TypeInfo ArrayElementTypeInfo = Context->getTypeInfo(ArrayElementType);
-                TypeDescriptor->Fields.back().Number = FieldTypeTypeInfo.Width / ArrayElementTypeInfo.Width;
+                Class->Fields.back().Number = FieldTypeTypeInfo.Width / ArrayElementTypeInfo.Width;
                 FieldUnqualifiedType = ArrayElementType;
             }
             else
@@ -179,16 +183,16 @@ public:
             // if is pointer type
             if (FieldUnqualifiedType->isPointerType())
             {
-                TypeDescriptor->Fields.back().QualifierFlag |= kPointerFlagBit;
+                Class->Fields.back().Flag |= kPointerFlagBit;
                 if (FieldUnqualifiedType.isConstant(*Context))
-                    TypeDescriptor->Fields.back().QualifierFlag |= kConstPointerFlagBit;
+                    Class->Fields.back().Flag |= kConstPointerFlagBit;
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
             // if is reference type
             if(FieldUnqualifiedType->isReferenceType())
             {
-                TypeDescriptor->Fields.back().QualifierFlag |= kReferenceFlagBit;
+                Class->Fields.back().Flag |= kReferenceFlagBit;
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
@@ -205,25 +209,25 @@ public:
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <The Pointer Pointer To Array>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
             if (FieldUnqualifiedType.isConstant(*Context)){
-                TypeDescriptor->Fields.back().QualifierFlag |= kConstValueFlagBit;
+                Class->Fields.back().Flag |= kConstValueFlagBit;
                 FieldUnqualifiedType = FieldUnqualifiedType.getUnqualifiedType();
             }
             // if is ReserveObject
             auto it = std::find_if(ReflectAnnotation.begin(), ReflectAnnotation.end(), [](std::string& str) { return 0 == strncmp(str.c_str(), "ReserveObjectId", 15); });
             if (std::end(ReflectAnnotation) != it) {
-                size_t pos = it->find_last_of("=");
+                //size_t pos = it->find_last_of("=");
                 int32_t ReserveObjectId = std::atoi(it->substr(16).c_str());
-                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(ReserveObjectId);
+                Class->Fields.back().Class = FClassTable::Get().GetClass(ReserveObjectId);
             }
             else if (FieldUnqualifiedType->isBuiltinType())
             {
-                TypeDescriptor->Fields.back().TypeDescriptor = FTypeDescriptorTable::Get().GetDescriptor(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
+                Class->Fields.back().Class = FClassTable::Get().GetClass(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
             }
             else if(FieldUnqualifiedType->isStructureOrClassType()|| FieldUnqualifiedType->isEnumeralType())
             {
-                FTypeDescriptor* ParsedDescriptor = ParseToDescriptor(FieldUnqualifiedType->getAsCXXRecordDecl());
-                if(ParsedDescriptor){
-                    TypeDescriptor->Fields.back().TypeDescriptor = ParsedDescriptor;
+                FClass* ParsedClass = ParseToClass(FieldUnqualifiedType->getAsCXXRecordDecl());
+                if(ParsedClass){
+                    Class->Fields.back().Class = ParsedClass;
                 }else{
                     SourceRange Loc = Field->getSourceRange();
                     PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
@@ -236,13 +240,13 @@ public:
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <Union>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
             }
-            assert(TypeDescriptor->Fields.back().TypeDescriptor != nullptr);
+            assert(Class->Fields.back().Class != nullptr);
         }
-        //llvm::outs() << TypeDescriptor->Dump();
-        return TypeDescriptor;
+        //llvm::outs() << Class->Dump();
+        return Class;
     }
     bool VisitCXXRecordDecl(CXXRecordDecl *CXXDecl) {
-        ParseToDescriptor(CXXDecl);
+        ParseToClass(CXXDecl);
         return true;
     }
 

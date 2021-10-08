@@ -1,12 +1,13 @@
 #pragma once
-#include "Descriptor.h"
+#include "Reflect.h"
 
 class CCodeGenerator
 {
 public:
     static CCodeGenerator& Get();
     bool Generate();
-    std::string ToGeneratedHeaderCode(FTypeDescriptor* Descriptor);
-    std::string ToGeneratedSourceCode(FTypeDescriptor* Descriptor);
-    std::vector<std::unique_ptr<FTypeDescriptor>> Descriptors;
+    std::string ToGeneratedHeaderCode(FClass* Descriptor);
+    std::string ToGeneratedSourceCode(FClass* Descriptor);
+    std::vector<std::unique_ptr<FClass>> Classes;
+    std::string BuildPath;
 };
