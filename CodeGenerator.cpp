@@ -62,7 +62,7 @@ bool CCodeGenerator::Generate()
         std::fstream GeneratedSourceFile;
         std::fstream GeneratedHeaderFile;
     };
-    std::vector<FClass*>& Classes = FClassTable::Get().Classes;
+    std::vector<std::unique_ptr<FClass>>& Classes = GeneratedReflectClasses;
     std::unordered_map<std::string, FGeneratedFileContext> GeneratedFileContextMap;
     for (size_t i = 0; i < Classes.size(); i++)
     {
@@ -95,15 +95,17 @@ bool CCodeGenerator::Generate()
                 GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
                 GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedSourceFile.write(SourceFileBegin.data(), SourceFileBegin.size());
             }
-            GeneratedFileContextMap[Classes[i]->DeclaredFile].Classes.push_back(Classes[i]);
+            GeneratedFileContextMap[Classes[i]->DeclaredFile].Classes.push_back(Classes[i].get());
         }
     }
     for (auto GeneratedFileContextIterator = GeneratedFileContextMap.begin(); GeneratedFileContextIterator != GeneratedFileContextMap.end(); GeneratedFileContextIterator++)
     {
+        std::vector<std::string> HeaderDependHeaderFile;
+        std::vector<std::string> SourceDependHeaderFile;
         for (auto Iterator = GeneratedFileContextIterator->second.Classes.begin(); Iterator != GeneratedFileContextIterator->second.Classes.end(); Iterator++)
         {
-            std::string GeneratedHeaderCode = ToGeneratedHeaderCode(*Iterator);
-            std::string GeneratedSourceCode = ToGeneratedSourceCode(*Iterator);
+            std::string GeneratedHeaderCode = ToGeneratedHeaderCode(*Iterator, HeaderDependHeaderFile);
+            std::string GeneratedSourceCode = ToGeneratedSourceCode(*Iterator, SourceDependHeaderFile);
             GeneratedFileContextIterator->second.GeneratedHeaderFile.write(GeneratedHeaderCode.data(), GeneratedHeaderCode.size());
             GeneratedFileContextIterator->second.GeneratedSourceFile.write(GeneratedSourceCode.data(), GeneratedSourceCode.size());
         }
@@ -113,20 +115,25 @@ bool CCodeGenerator::Generate()
     return true;
 }
 
-std::string CCodeGenerator::ToGeneratedHeaderCode(FClass* Class)
+std::string CCodeGenerator::ToGeneratedHeaderCode(FClass* Class, std::vector<std::string>& DependHeaderFile)
 {
     std::string HeaderCode;
     return HeaderCode;
 }
 
-std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class)
+std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std::string>& DependHeaderFile)
 {
     std::string SourceCode;
     SourceCode += std::format(
         "const FClass* {0:s}::GetClass()\n"
         "{{\n"
         "    static std::function<FClass* ()> ClassInitializer = []() -> FClass* {{\n"
-        "        static FClass Class;\n"
+        "        static struct {0:s}Class : public FClass {{\n"
+        "            void* New()                    override {{ return new {0:s}(); }}\n"
+        "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
+        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n"
+        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n"
+        "        }} Class{{}};\n"
         "        Class.Name = \"{0:s}\";\n"
         "        Class.Size = sizeof({0:s});\n"
         "        Class.Flag = {1:#010x};\n",
@@ -138,7 +145,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class)
     for (size_t i = 0; i < Class->Fields.size(); i++)
     {
         SourceCode += std::format(
-        "        Class.Fields[{0:d}].ClassName = \"{1:s}\";\n"
+        "        Class.Fields[{0:d}].Class = {1:s}::GetClass();\n"
         "        Class.Fields[{0:d}].Name = \"{2:s}\";\n"
         "        Class.Fields[{0:d}].Flag = {3:#010x};\n"
         "        Class.Fields[{0:d}].Offset = offsetof({5:s},{2:s});\n"
@@ -150,13 +157,45 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class)
         Class->Fields[i].Number,
         Class->Name);
     }
+
+    SourceCode += std::format(
+        "        Class.Alias.resize({:d});\n", Class->Alias.size());
+    for (size_t i = 0; i < Class->Alias.size(); i++)
+    {
+        SourceCode += std::format(
+        "        Class.Alias[{0:d}] = {1:s};\n",
+        i,
+        Class->Alias[i]);
+    }
+
+    SourceCode += std::format(
+        "        Class.ParentClasses.resize({:d});\n", Class->ParentClasses.size());
+    for (size_t i = 0; i < Class->ParentClasses.size(); i++)
+    {
+        if(Class->ParentClasses[i]->IsReflectClass())
+        {
+        SourceCode += std::format(
+            "        Class.ParentClasses.push_back({0:s}::GetClass());\n", Class->ParentClasses[i]->Name);
+        }
+    }
+
     SourceCode += std::format(
         "        return &Class;\n"
         "    }};\n"
-        "    static FClass* {0:s}Class;\n"
+        "    static FClass* {0:s}Class = ClassInitializer();\n"
         "    return {0:s}Class;\n"
-        "}}\n",
+        "}}\n\n",
         Class->Name);
+
+    SourceCode += std::format(
+        "// ClassId init must before ClassAutoRegister\n"
+        "Uint32 {0:s}::ClassId = 0;\n\n",
+        Class->Name);
+    SourceCode += std::format(
+        "static FClassAutoRegister<{0:s}> {0:s}ClassAutoRegister;\n\n",
+        Class->Name);
+
+
 
     //TypeKind[0] = std::toupper(TypeKind[0]);
     //SourceCode += std::format("Uint32 {0:s}::GetTypeId() {{ return {1:d}; }}\n\n"

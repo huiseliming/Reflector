@@ -21,7 +21,7 @@
 #define REFLECT_GENERATED_BODY() \
 public: \
 static const FClass* GetClass();\
-
+static Uint32 ClassId;
 
 
 #ifdef REFLECT_CODE_GENERATOR
@@ -50,6 +50,7 @@ enum EClassFlag :Uint32 {
 	kClassNoFlag = 0,
 	kHasDefaultConstructorFlagBit = 1 << 0,
 	kHasDestructorFlagBit = 1 << 1,
+	kUserWritedReflectClassFlagBit = 1 << 2,
 };
 
 enum EFunctionFlag :Uint32 {
@@ -68,21 +69,21 @@ enum EQualifierFlag :Uint32 {
 
 struct FParameter 
 {
-	FClass* Class{ nullptr };
+	const FClass* Class{ nullptr };
 	STRING_TYPE Name{ "" };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 };
 
 struct FRetVal
 {
-	FClass* Class{ nullptr };
+	const FClass* Class{ nullptr };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 };
 
 struct FFunction {
 	STRING_TYPE Name{""};
 	void *Ptr{nullptr};
-	FClass* OwnerClass{nullptr}; //  Owner {Class | Struct} TypeDescriptor
+	const FClass* OwnerClass{nullptr}; //  Owner {Class | Struct} TypeDescriptor
 	FRetVal Ret;
 	std::vector<FParameter> Args;
 	Uint32 Flag{ kFunctionNoFlag }; //EFunctionFlag
@@ -94,11 +95,14 @@ struct FFunction {
 struct FField
 {
 	STRING_TYPE Name{ "" };
-	FClass* Class{ nullptr };
-	STRING_TYPE ClassName {""};
+	const FClass* Class{ nullptr };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 	size_t Offset{ 0 };
 	size_t Number{ 1 };
+//#ifdef REFLECT_CODE_GENERATOR
+//	STRING_TYPE ClassName {""};
+//#endif
+
 
 	bool IsNoQualifierType()  { return Flag == kQualifierNoFlag; }
 	bool IsPointerType()      { return Flag & kPointerFlagBit; }
@@ -126,23 +130,37 @@ struct FClass
 	std::vector<FField> Fields;
 	std::vector<FFunction> Functions;
 	std::vector<STRING_TYPE> Alias;
-	std::vector<STRING_TYPE> ParentClassName;
+	std::vector<FClass*> ParentClasses;
 	Uint32 Id{ 0 };
 #ifdef REFLECT_CODE_GENERATOR
 	std::string DeclaredFile;
+	virtual bool IsReflectClass() { return true; }
 #endif // REFLECT_CODE_GENERATOR
 	bool HasDefaultConstructor() { return Flag & kHasDefaultConstructorFlagBit; }
 	bool HasDestructor() { return Flag & kHasDestructorFlagBit; }
+	bool IsReflectGeneratedClass() { return !(Flag & kUserWritedReflectClassFlagBit); }
+
+
+	virtual bool IsBuiltInType() { return false; }
 
 	virtual void* New() { return nullptr; }
 	virtual void Delete(void* Object) { }
 	virtual void Constructor(void* ConstructedObject) { }
+	virtual void Destructor(void* DestructedObject) { }
+
 	virtual void CopyConstructor(void* ConstructedObject, void* CopyedObject) { }
 	virtual void MoveConstructor(void* ConstructedObject, void* MoveedObject) { }
-	virtual void Destructor(void* DestructedObject) { }
 	virtual void CopyAssignmentOperator(void* LObject, void* RObject) {}
 	virtual void MoveAssignmentOperator(void* LObject, void* RObject) {}
 };
+
+
+#ifdef REFLECT_CODE_GENERATOR
+struct FNonReflectClass : public FClass
+{
+	virtual bool IsReflectClass() { return false; }
+};
+#endif // REFLECT_CODE_GENERATOR
 
 struct FEnum
 {
@@ -162,17 +180,26 @@ public:
 	static FClassTable& Get();
 	FClass* GetClass(const char* ClassName);
 	FClass* GetClass(Uint32 ClassId);
-	bool RegisterClass(const char* TypeName, FClass* Class);
+	uint32_t RegisterClassToTable(const char* TypeName, FClass* Class);
 };
+
+#pragma pack (push,1)
 
 
 struct FVoid
 {
 	static const FClass* GetClass()
 	{
+		static_assert(sizeof(FVoid) == 1);
 		static std::function<FClass* ()> ClassInitializer = []() -> FClass* {
-			static FClass Class;
-			Class.Name = "void";
+			static struct FVoidClass : public FClass {
+				bool IsBuiltInType()           override { return true; }
+				void* New()                    override { return nullptr; }
+				void Delete(void* Object)      override { }
+				void Constructor(void* Object) override { }
+				void Destructor(void* Object)  override { }
+			} Class{};
+			Class.Name = "FVoid";
 			Class.Size = 0;
 			Class.Flag = kClassNoFlag;
 			return &Class;
@@ -180,34 +207,64 @@ struct FVoid
 		static FClass* VoidClass = ClassInitializer();
 		return VoidClass;
 	}
+	static Uint32 ClassId;
 };
 
-#define DEFINE_BUILT_IN_CLASS(VarName, BuiltInType) \
-struct F##VarName\
-{\
-	static const FClass* GetClass()\
-	{\
-		static std::function<FClass* ()> ClassInitializer = []() -> FClass* {\
-			static FClass Class{};\
-			Class.Name = #BuiltInType;\
-			Class.Size = sizeof(BuiltInType);\
-			Class.Flag = kClassNoFlag;\
-			return &Class;\
-		};\
-		static FClass* VarName##Class = ClassInitializer();\
-		return VarName##Class;\
-	}\
-};
+#define DEFINE_BUILT_IN_CLASS(VarName, BuiltInType)                                                    \
+struct F##VarName                                                                                      \
+{                                                                                                      \
+	static const FClass* GetClass()                                                                    \
+	{                                                                                                  \
+		static_assert(sizeof(F##VarName) == sizeof(BuiltInType));                                      \
+		static std::function<FClass* ()> ClassInitializer = []() -> FClass* {                          \
+			static struct F##VarNameClass : public FClass {                                            \
+				bool IsBuiltInType()                      override { return true; }                    \
+				void* New()                               override { return new BuiltInType; }         \
+				void Delete(void* Object)                 override {	delete (BuiltInType*)Object; } \
+				void Constructor(void* ConstructedObject) override { }                                 \
+				void Destructor(void* DestructedObject)   override { }                                 \
+			} Class{};                                                                                 \
+			Class.Name = "F" #VarName;                                                                 \
+			Class.Size = sizeof(BuiltInType);                                                          \
+			Class.Flag = kClassNoFlag;                                                                 \
+			return &Class;                                                                             \
+		};                                                                                             \
+		static FClass* VarName##Class = ClassInitializer();                                            \
+		return VarName##Class;                                                                         \
+	}                                                                                                  \
+	static Uint32 ClassId;                                                                             \
+	BuiltInType VarName;                                                                               \
+};                                                                                                     \
 
 
-DEFINE_BUILT_IN_CLASS(Bool  , bool);
-DEFINE_BUILT_IN_CLASS(Int8  , char);
-DEFINE_BUILT_IN_CLASS(Uint8 , unsigned char);
-DEFINE_BUILT_IN_CLASS(Int16 , short);
-DEFINE_BUILT_IN_CLASS(Uint16, unsigned short);
-DEFINE_BUILT_IN_CLASS(Int32 , int);
-DEFINE_BUILT_IN_CLASS(Uint32, unsigned int);
-DEFINE_BUILT_IN_CLASS(Int64 , long long);
+
+DEFINE_BUILT_IN_CLASS(Bool  , bool              );
+DEFINE_BUILT_IN_CLASS(Int8  , char              );
+DEFINE_BUILT_IN_CLASS(Uint8 , unsigned char     );
+DEFINE_BUILT_IN_CLASS(Int16 , short             );
+DEFINE_BUILT_IN_CLASS(Uint16, unsigned short    );
+DEFINE_BUILT_IN_CLASS(Int32 , int               );
+DEFINE_BUILT_IN_CLASS(Uint32, unsigned int      );
+DEFINE_BUILT_IN_CLASS(Int64 , long long         );
 DEFINE_BUILT_IN_CLASS(Uint64, unsigned long long);
-DEFINE_BUILT_IN_CLASS(Float , float);
-DEFINE_BUILT_IN_CLASS(Double, double);
+DEFINE_BUILT_IN_CLASS(Float , float             );
+DEFINE_BUILT_IN_CLASS(Double, double            );
+
+#undef DEFINE_BUILT_IN_CLASS
+
+#pragma pack(pop)
+
+template<typename T>
+struct FClassAutoRegister {
+	FClassAutoRegister()
+	{
+		const FClass* Class = T::GetClass();
+		T::ClassId = FClassTable::Get().RegisterClassToTable(Class->Name, const_cast<FClass*>(Class));
+	}
+};
+
+//template<typename TA, typename TB>
+//bool IsA(TB* B)
+//{
+//	return B->IsA<TA>();
+//}

@@ -22,6 +22,7 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 // A help message for this specific tool can be added afterwards.
 static cl::extrahelp MoreHelp("\nMore help text...\n");
 
+bool ParseFailed = false;
 
 int main(int argc, const char **argv) {
     std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
@@ -94,10 +95,14 @@ int main(int argc, const char **argv) {
             return NewCmdArg;
         });
     int Result = Tool.run(newFrontendActionFactory<FindCXXDeclAction>().get());
-    if(Result == 0){
+    if(Result == 0 && !ParseFailed){
         CCodeGenerator::Get().Generate();
+        std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
+        llvm::outs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
+        return 0;
     }
+    llvm::errs() << std::format("Parsing reflect object failed\n");
     std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
-    llvm::outs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
-    return Result;
+    llvm::errs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
+    return 1;
 }

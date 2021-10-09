@@ -16,7 +16,9 @@
 #include <filesystem>
 
 using namespace clang;
-extern std::string BuildPath;
+
+extern bool ParseFailed;
+
 void SplitAnnotation(StringRef AnnotationString, std::vector<std::string>& Annotations)
 {
     Annotations.clear();
@@ -68,27 +70,40 @@ public:
         if(!FindReflectAnnotation(CXXDecl, "Object", ReflectAnnotation)) return nullptr;
         //CXXDecl->dump();
         if(CXXDecl->isClass()){
+
         } else if(CXXDecl->isStruct()){
+
         }else if(CXXDecl->isEnum()){
             //CCodeGenerator::Get().Classes.emplace_back(std::make_unique<FClass>(CXXDecl->getQualifiedNameAsString().c_str()));
         } else if(CXXDecl->isUnion()){
             SourceRange Loc = CXXDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
             llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this type <Union>", PLoc.getFilename(), PLoc.getLine(), CXXDecl->getQualifiedNameAsString());
+            ParseFailed = true;
             return nullptr;
         }else{
             SourceRange Loc = CXXDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
             llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), CXXDecl->getQualifiedNameAsString());
+            ParseFailed = true;
             return nullptr;
         }
-        CCodeGenerator::Get().Classes.emplace_back(std::make_unique<FClass>());
-        CCodeGenerator::Get().Classes.back()->Name = CXXDecl->getQualifiedNameAsString().c_str();
-        Class = CCodeGenerator::Get().Classes.back().get();
+        CCodeGenerator::Get().GeneratedReflectClasses.emplace_back(std::make_unique<FClass>());
+        CCodeGenerator::Get().GeneratedReflectClasses.back()->Name = CXXDecl->getQualifiedNameAsString();
+        Class = CCodeGenerator::Get().GeneratedReflectClasses.back().get();
+        FClassTable::Get().RegisterClassToTable(Class->Name.c_str(), Class);
 
         for (auto BasesIterator = CXXDecl->bases_begin(); BasesIterator != CXXDecl->bases_end(); BasesIterator++)
         {
-            Class->ParentClassName.push_back(BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString());
+            FClass* ParentClass = ParseToClass(BasesIterator->getType()->getAsCXXRecordDecl());
+            if (!ParentClass)
+            {
+                CCodeGenerator::Get().OtherClasses.emplace_back(std::make_unique<FNonReflectClass>());
+                ParentClass = CCodeGenerator::Get().GeneratedReflectClasses.back().get();
+                ParentClass->Name = BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString();
+                FClassTable::Get().RegisterClassToTable(ParentClass->Name.c_str(), ParentClass);
+            }
+            Class->ParentClasses.push_back(ParentClass);
         }
 
         // Function parse
@@ -150,8 +165,16 @@ public:
         }
         // Field parse
         SourceRange Loc = CXXDecl->getSourceRange();
-        Class->DeclaredFile = std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + Context->getSourceManager().getFilename(Loc.getBegin()).str()).string();
-        FClassTable::Get().RegisterClass(CXXDecl->getQualifiedNameAsString().c_str(), Class);
+        std::filesystem::path File(Context->getSourceManager().getFilename(Loc.getBegin()).str());
+        if (File.is_absolute()) 
+        {
+            Class->DeclaredFile = File.string();
+        }
+        else
+        {
+            Class->DeclaredFile = std::filesystem::canonical(std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + File.string())).string();
+        }
+
         const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(CXXDecl);
         for (auto Field = CXXDecl->field_begin(); Field != CXXDecl->field_end(); Field++)
         {
@@ -201,37 +224,53 @@ public:
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <Multi-level Pointer>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                ParseFailed = true;
+                return nullptr;
             }
             // unsupported The Pointer Pointer To Array
             if (FieldUnqualifiedType->isArrayType()) {
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported Complex Type <The Pointer Pointer To Array>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                ParseFailed = true;
+                return nullptr;
             }
             if (FieldUnqualifiedType.isConstant(*Context)){
                 Class->Fields.back().Flag |= kConstValueFlagBit;
                 FieldUnqualifiedType = FieldUnqualifiedType.getUnqualifiedType();
             }
-            // if is ReserveObject
-            auto it = std::find_if(ReflectAnnotation.begin(), ReflectAnnotation.end(), [](std::string& str) { return 0 == strncmp(str.c_str(), "ReserveObjectId", 15); });
-            if (std::end(ReflectAnnotation) != it) {
-                //size_t pos = it->find_last_of("=");
-                int32_t ReserveObjectId = std::atoi(it->substr(16).c_str());
-                Class->Fields.back().Class = FClassTable::Get().GetClass(ReserveObjectId);
-            }
-            else if (FieldUnqualifiedType->isBuiltinType())
+            if (FieldUnqualifiedType->isBuiltinType())
             {
                 Class->Fields.back().Class = FClassTable::Get().GetClass(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
             }
             else if(FieldUnqualifiedType->isStructureOrClassType()|| FieldUnqualifiedType->isEnumeralType())
             {
                 FClass* ParsedClass = ParseToClass(FieldUnqualifiedType->getAsCXXRecordDecl());
-                if(ParsedClass){
+                if(ParsedClass && ParsedClass->IsReflectClass() && ParsedClass->IsReflectGeneratedClass()){
                     Class->Fields.back().Class = ParsedClass;
                 }else{
-                    SourceRange Loc = Field->getSourceRange();
-                    PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                    llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                    // if is ReserveObject
+                    auto it = std::find_if(ReflectAnnotation.begin(), ReflectAnnotation.end(), [](std::string& str) { return 0 == strncmp(str.c_str(), "ReflectClass=", sizeof("ReflectClass=") - 1); });
+                    if (std::end(ReflectAnnotation) != it) {
+                        std::string ReflectObjectName = it->substr(sizeof("ReflectClass=") - 1);
+                        FClass* UserWritedReflectClass = FClassTable::Get().GetClass(ReflectObjectName.c_str());
+                        if (nullptr == UserWritedReflectClass) {
+                            CCodeGenerator::Get().OtherClasses.emplace_back(std::make_unique<FClass>());
+                            UserWritedReflectClass = CCodeGenerator::Get().OtherClasses.back().get();
+                            UserWritedReflectClass->Name = ReflectObjectName;
+                            UserWritedReflectClass->Flag |= kUserWritedReflectClassFlagBit;
+                            FClassTable::Get().RegisterClassToTable(ReflectObjectName.c_str(), UserWritedReflectClass);
+                        }
+                        Class->Fields.back().Class = UserWritedReflectClass;
+                    }
+                    else
+                    {
+                        SourceRange Loc = Field->getSourceRange();
+                        PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                        llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                        ParseFailed = true;
+                        return nullptr;
+                    }
                 }
             }
             else
@@ -239,6 +278,8 @@ public:
                 SourceRange Loc = Field->getSourceRange();
                 PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <Union>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                ParseFailed = true;
+                return nullptr;
             }
             assert(Class->Fields.back().Class != nullptr);
         }
