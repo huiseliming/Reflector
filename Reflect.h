@@ -130,7 +130,8 @@ struct FClass
 	std::vector<FField> Fields;
 	std::vector<FFunction> Functions;
 	std::vector<STRING_TYPE> Alias;
-	std::vector<FClass*> ParentClasses;
+	std::vector<const FClass*> ParentClasses;
+	std::vector<const char*> ParentClassesName;
 	Uint32 Id{ 0 };
 #ifdef REFLECT_CODE_GENERATOR
 	std::string DeclaredFile;

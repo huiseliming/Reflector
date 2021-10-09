@@ -157,25 +157,27 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std
         Class->Fields[i].Number,
         Class->Name);
     }
-
-    SourceCode += std::format(
-        "        Class.Alias.resize({:d});\n", Class->Alias.size());
-    for (size_t i = 0; i < Class->Alias.size(); i++)
-    {
+    if (Class->Alias.size() > 0) {
         SourceCode += std::format(
-        "        Class.Alias[{0:d}] = {1:s};\n",
-        i,
-        Class->Alias[i]);
+        "        Class.Alias.resize({:d});\n", Class->Alias.size());
+        for (size_t i = 0; i < Class->Alias.size(); i++)
+        {
+            SourceCode += std::format(
+        "        Class.Alias[{0:d}] = {1:s};\n", i, Class->Alias[i]);
+        }
+
     }
 
-    SourceCode += std::format(
-        "        Class.ParentClasses.resize({:d});\n", Class->ParentClasses.size());
-    for (size_t i = 0; i < Class->ParentClasses.size(); i++)
-    {
-        if(Class->ParentClasses[i]->IsReflectClass())
-        {
+    if (Class->ParentClasses.size() > 0) {
         SourceCode += std::format(
-            "        Class.ParentClasses.push_back({0:s}::GetClass());\n", Class->ParentClasses[i]->Name);
+        "        Class.ParentClasses.resize({:d});\n", Class->ParentClasses.size());
+        for (size_t i = 0; i < Class->ParentClasses.size(); i++)
+        {
+            if (const_cast<FClass*>(Class->ParentClasses[i])->IsReflectClass())
+            {
+                SourceCode += std::format(
+        "        Class.ParentClasses[{0:d}] = {1:s}::GetClass();\n", i, Class->ParentClasses[i]->Name);
+            }
         }
     }
 

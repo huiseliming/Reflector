@@ -95,12 +95,12 @@ uint32_t FClassTable::RegisterClassToTable(const char* ClassName, FClass* Class)
     return Class->Id;
 }
 
-const Uint32 FVoid::ClassId = 0;
+Uint32 FVoid::ClassId = 0;
 #ifdef REFLECT_CODE_GENERATOR
-#define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) const Uint32 F##VarName##::ClassId = 0;
+#define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) Uint32 F##VarName##::ClassId = 0;
 #else
 #define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) \
-const Uint32 F##VarName##::ClassId = 0;\
+Uint32 F##VarName##::ClassId = 0;\
 static FClassAutoRegister<F##VarName> F##VarName##ClassAutoRegister;
 #endif
 
