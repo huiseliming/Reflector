@@ -10,10 +10,12 @@
 
 #ifdef __REFLECTOR__
 #define REFLECT_OBJECT(...) __attribute__((annotate("Object"   __VA_OPT__(",") #__VA_ARGS__)))
+#define REFLECT_ENUM(...)   __attribute__((annotate("Enum"     __VA_OPT__(",") #__VA_ARGS__)))
 #define PROPERTY(...)       __attribute__((annotate("Property" __VA_OPT__(",") #__VA_ARGS__)))
 #define FUNCTION(...)       __attribute__((annotate("Function" __VA_OPT__(",") #__VA_ARGS__)))
 #else
 #define REFLECT_OBJECT(...)
+#define REFLECT_ENUM(...)
 #define PROPERTY(...)
 #define FUNCTION(...)
 #endif
@@ -65,6 +67,7 @@ enum EQualifierFlag :Uint32 {
 	kReferenceFlagBit = 1 << 1,
 	kConstValueFlagBit = 1 << 2,
 	kConstPointerFlagBit = 1 << 3,
+
 };
 
 struct FParameter 
@@ -131,18 +134,22 @@ struct FClass
 	std::vector<FFunction> Functions;
 	std::vector<STRING_TYPE> Alias;
 	std::vector<const FClass*> ParentClasses;
-	std::vector<const char*> ParentClassesName;
 	Uint32 Id{ 0 };
 #ifdef REFLECT_CODE_GENERATOR
 	std::string DeclaredFile;
 	virtual bool IsReflectClass() { return true; }
+	bool IsReflectionDataCollectionCompleted{ false };
 #endif // REFLECT_CODE_GENERATOR
+
+	virtual bool IsBuiltInType() { return false; }
+	virtual bool IsEnumClass() { return false; }
+	virtual bool IsForwardDeclaredClass() { return false; }
+
+
 	bool HasDefaultConstructor() { return Flag & kHasDefaultConstructorFlagBit; }
 	bool HasDestructor() { return Flag & kHasDestructorFlagBit; }
 	bool IsReflectGeneratedClass() { return !(Flag & kUserWritedReflectClassFlagBit); }
 
-
-	virtual bool IsBuiltInType() { return false; }
 
 	virtual void* New() { return nullptr; }
 	virtual void Delete(void* Object) { }
@@ -161,13 +168,25 @@ struct FNonReflectClass : public FClass
 {
 	virtual bool IsReflectClass() { return false; }
 };
-#endif // REFLECT_CODE_GENERATOR
 
-struct FEnum
+struct FForwardDeclaredClass : public FClass
 {
-
+	bool IsForwardDeclaredClass() { return true; }
 };
 
+#endif // REFLECT_CODE_GENERATOR
+
+struct FEnumClass : public FClass
+{
+	
+	virtual ~FEnumClass(){}
+	virtual const char* GetEnumName() { return ""; }
+	virtual bool IsEnumClass() { return true; }
+#ifdef REFLECT_CODE_GENERATOR
+	std::vector<std::string> OptName;
+	std::vector<Uint64> OptVal;
+#endif
+};
 
 struct FClassTable {
 protected:
@@ -176,13 +195,32 @@ public:
 	std::unordered_map<std::string, int32_t> NameToId;
 	std::vector<FClass*> Classes;
 	std::atomic<int32_t> IdCounter{ 1 };
-	std::list<std::function<void()>> ReflectorInitializer;
+	std::list<std::function<bool()>> DeferredRegisterList;
 
 	static FClassTable& Get();
 	FClass* GetClass(const char* ClassName);
 	FClass* GetClass(Uint32 ClassId);
 	uint32_t RegisterClassToTable(const char* TypeName, FClass* Class);
+
+	/**
+	 * must be called after global initialization is complete and before use,
+	 * this function will defer registration
+	 * 
+	 * exmaple: 
+	 * int main(int argc, const char* argv[])
+	 * {
+	 *     GClassTable->Initialize();
+	 *     //Do something ...
+	 *     return 0;
+	 * }
+	**/
+	void Initialize();
 };
+
+/** 
+ * can be used after global initialization is complete
+**/
+extern FClassTable* GClassTable;
 
 #pragma pack (push,1)
 
@@ -221,7 +259,7 @@ struct F##VarName                                                               
 			static struct F##VarNameClass : public FClass {                                            \
 				bool IsBuiltInType()                      override { return true; }                    \
 				void* New()                               override { return new BuiltInType; }         \
-				void Delete(void* Object)                 override {	delete (BuiltInType*)Object; } \
+				void Delete(void* Object)                 override { delete (BuiltInType*)Object; } \
 				void Constructor(void* ConstructedObject) override { }                                 \
 				void Destructor(void* DestructedObject)   override { }                                 \
 			} Class{};                                                                                 \

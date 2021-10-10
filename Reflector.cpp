@@ -4,11 +4,45 @@
 #include "clang/Tooling/Tooling.h"
 // Declares llvm::cl::extrahelp.
 #include "llvm/Support/CommandLine.h"
-#include "FindCXXDeclAction.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "CodeGenerator.h"
+#include "ReflectMatcher.h"
 
 using namespace clang::tooling;
 using namespace llvm;
+using namespace clang;
+//"\n"
+//"-p <build-path> is used to read a compile command database.\n"
+//"\n"
+//"\tFor example, it can be a CMake build directory in which a file named\n"
+//"\tcompile_commands.json exists (use -DCMAKE_EXPORT_COMPILE_COMMANDS=ON\n"
+//"\tCMake option to get this output). When no build path is specified,\n"
+//"\ta search for compile_commands.json will be attempted through all\n"
+//"\tparent paths of the first input file . See:\n"
+//"\thttps://clang.llvm.org/docs/HowToSetupToolingForLLVM.html for an\n"
+//"\texample of setting up Clang Tooling on a source tree.\n"
+//"\n"
+//"<source0> ... specify the paths of source files. These paths are\n"
+//"\tlooked up in the compile command database. If the path of a file is\n"
+//"\tabsolute, it needs to point into CMake's source tree. If the path is\n"
+//"\trelative, the current working directory needs to be in the CMake\n"
+//"\tsource tree and the file must be in a subdirectory of the current\n"
+//"\tworking directory. \"./\" prefixes in the relative files will be\n"
+//"\tautomatically removed, but the rest of a relative path must be a\n"
+//"\tsuffix of a path in the compile command database.\n"
+//"\n";
+
+const char ReflectGeneratorHelpMessage[] = 
+"\n"
+"HuiSeLiMing:\n\n"
+"  -p <BuildPath>\n"
+"    set path to read compile_commands.json.\n"
+"    设置构建路径读取 compile_commands.json.\n\n"
+"  <Source0> [ ... <SourceN> ]\n"
+"    generate reflect-source files from these source files\n"
+"    反射源文件从这些源文件中生成\n\n"
+;
 
 // Apply a custom category to all command-line options so that they are the
 // only ones displayed.
@@ -17,10 +51,12 @@ static llvm::cl::OptionCategory MyToolCategory("ReflectGenerator");
 // CommonOptionsParser declares HelpMessage with a description of the common
 // command-line options related to the compilation database and input files.
 // It's nice to have this help message in all tools.
-static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
+static cl::extrahelp CommonHelp(ReflectGeneratorHelpMessage);
+
+
 
 // A help message for this specific tool can be added afterwards.
-static cl::extrahelp MoreHelp("\nMore help text...\n");
+//static cl::extrahelp MoreHelp("\n  \n");
 
 bool ParseFailed = false;
 
@@ -59,6 +95,12 @@ int main(int argc, const char **argv) {
     OptionsParser.getArgumentsAdjuster();
     ClangTool Tool(OptionsParser.getCompilations(),
                     OptionsParser.getSourcePathList());
+    clang::ast_matchers::MatchFinder Finder;
+    ReflectEnumMatcher EnumMatcher;
+    Finder.addMatcher(enumDecl(hasAttr(attr::Annotate)).bind("Enum"), &EnumMatcher);
+    ReflectClassMatcher ClassMatcher;
+    Finder.addMatcher(cxxRecordDecl(hasAttr(attr::Annotate)).bind("Class"), &ClassMatcher);
+
     Tool.appendArgumentsAdjuster([](const CommandLineArguments& CmdArg, StringRef Filename)
         -> CommandLineArguments
         {
@@ -94,7 +136,7 @@ int main(int argc, const char **argv) {
             llvm::outs() << "\n";
             return NewCmdArg;
         });
-    int Result = Tool.run(newFrontendActionFactory<FindCXXDeclAction>().get());
+    int Result = Tool.run(newFrontendActionFactory(&Finder).get());
     if(Result == 0 && !ParseFailed){
         CCodeGenerator::Get().Generate();
         std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();

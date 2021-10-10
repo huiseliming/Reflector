@@ -66,7 +66,7 @@ bool CCodeGenerator::Generate()
     std::unordered_map<std::string, FGeneratedFileContext> GeneratedFileContextMap;
     for (size_t i = 0; i < Classes.size(); i++)
     {
-        if (!Classes[i]->DeclaredFile.empty())
+        if (Classes[i]->IsReflectionDataCollectionCompleted && !Classes[i]->DeclaredFile.empty())
         {
             if (std::end(GeneratedFileContextMap) == GeneratedFileContextMap.find(Classes[i]->DeclaredFile)) {
                 GeneratedFileContextMap.insert(std::make_pair<>(Classes[i]->DeclaredFile, FGeneratedFileContext()));
@@ -109,6 +109,7 @@ bool CCodeGenerator::Generate()
             GeneratedFileContextIterator->second.GeneratedHeaderFile.write(GeneratedHeaderCode.data(), GeneratedHeaderCode.size());
             GeneratedFileContextIterator->second.GeneratedSourceFile.write(GeneratedSourceCode.data(), GeneratedSourceCode.size());
         }
+        
         GeneratedFileContextIterator->second.GeneratedHeaderFile.close();
         GeneratedFileContextIterator->second.GeneratedSourceFile.close();
     }
@@ -124,15 +125,48 @@ std::string CCodeGenerator::ToGeneratedHeaderCode(FClass* Class, std::vector<std
 std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std::string>& DependHeaderFile)
 {
     std::string SourceCode;
+    SourceCode.reserve(4*1024);
+    if(Class->IsEnumClass()){
+        FEnumClass* EnumClass = (FEnumClass*)Class;
+        SourceCode += std::format(
+        "const char* ToString(const {0:s} In)\n"
+        "{{\n"
+        "    switch (In)\n"
+        "    {{\n",
+        EnumClass->Name);
+        for (size_t i = 0; i < EnumClass->OptVal.size(); i++)
+        {
+            SourceCode += std::format(
+        "    case {0:d}:\n"
+        "        return \"{1:s}\";\n",
+            EnumClass->OptVal[i],
+            EnumClass->OptName[i]);
+        }
+        SourceCode += std::format(
+        "        default:\n"
+        "            return \"Undefine\";\n"
+        "    }}\n"
+        "}}\n\n");
+        return SourceCode;
+    }
     SourceCode += std::format(
         "const FClass* {0:s}::GetClass()\n"
         "{{\n"
         "    static std::function<FClass* ()> ClassInitializer = []() -> FClass* {{\n"
-        "        static struct {0:s}Class : public FClass {{\n"
+        "        static struct {0:s}Class : public FClass {{\n",
+        Class->Name
+    );
+    if(Class->HasDefaultConstructor()){
+        SourceCode += std::format(
         "            void* New()                    override {{ return new {0:s}(); }}\n"
+        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n", Class->Name);
+    }
+    if (Class->HasDefaultConstructor()) {
+        SourceCode += std::format(
         "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
-        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n"
-        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n"
+        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n", Class->Name);
+    }
+    SourceCode += std::format(
         "        }} Class{{}};\n"
         "        Class.Name = \"{0:s}\";\n"
         "        Class.Size = sizeof({0:s});\n"
@@ -144,8 +178,27 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std
         "        Class.Fields.resize({:d});\n", Class->Fields.size());
     for (size_t i = 0; i < Class->Fields.size(); i++)
     {
+        FClass* FieldsClass = const_cast<FClass*>(Class->Fields[i].Class);
+        if(FieldsClass->IsForwardDeclaredClass()){
+            SourceCode += std::format(
+        "        FClassTable::Get().DeferredRegisterList.push_back([&] {{\n"
+        "            FClass* FieldClass = FClassTable::Get().GetClass(\"{1:s}\");\n"
+        "            if(FieldClass != nullptr) {{\n"
+        "                Class.Fields[{0:d}].Class = FieldClass;\n"
+        "                return true;\n"
+        "            }}\n"
+        "            assert(false && \"CLASS {1:s} NO EXIST\");\n"
+        "            return false;\n"
+        "        }});\n", 
+        i, 
+        Class->Fields[i].Class->Name);
+        }
+        else
+        {
+            SourceCode += std::format(
+        "        Class.Fields[{0:d}].Class = {1:s}::GetClass();\n", i, Class->Fields[i].Class->Name);
+        }
         SourceCode += std::format(
-        "        Class.Fields[{0:d}].Class = {1:s}::GetClass();\n"
         "        Class.Fields[{0:d}].Name = \"{2:s}\";\n"
         "        Class.Fields[{0:d}].Flag = {3:#010x};\n"
         "        Class.Fields[{0:d}].Offset = offsetof({5:s},{2:s});\n"
@@ -189,75 +242,13 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std
         "}}\n\n",
         Class->Name);
 
+    // ClassId init must before ClassAutoRegister
     SourceCode += std::format(
-        "// ClassId init must before ClassAutoRegister\n"
         "Uint32 {0:s}::ClassId = 0;\n\n",
         Class->Name);
     SourceCode += std::format(
         "static FClassAutoRegister<{0:s}> {0:s}ClassAutoRegister;\n\n",
         Class->Name);
-
-
-
-    //TypeKind[0] = std::toupper(TypeKind[0]);
-    //SourceCode += std::format("Uint32 {0:s}::GetTypeId() {{ return {1:d}; }}\n\n"
-    //                          "FTypeDescriptor* {0:s}::GetTypeDescriptor()\n"
-    //                          "{{\n"
-    //                          "    static std::function<FTypeDescriptor* ()> DescriptorInitializer = []() -> FTypeDescriptor* {{\n"
-    //                          "        struct F{0:s}Descriptor : public F{3:s}Descriptor {{\n"
-    //                          "            F{0:s}Descriptor(const char* InTypeName, size_t InTypeSize = 0)\n"
-    //                          "                : F{3:s}Descriptor(InTypeName, InTypeSize)\n"
-    //                          "            {{}}\n"
-    //                          "            virtual void* New()                               override {{ {4:s} }}\n"
-    //                          "            virtual void Delete(void* Object)                 override {{ {5:s} }}\n"
-    //                          "            virtual void Constructor(void* ConstructedObject) override {{ {6:s} }}\n"
-    //                          "            virtual void Destructor(void* DestructedObject)   override {{ {7:s} }}\n"
-    //                          "        }};\n"
-    //                          "        static F{0:s}Descriptor Descriptor(\"{0:s}\", sizeof({0:s}));\n"
-    //                          "        Descriptor.Fields.resize({2:d});\n", Descriptor->TypeName[0], Descriptor->TypeId, Descriptor->Fields.size(), TypeKind,
-    //                            Descriptor->HasDefaultConstructor() ? std::format("return new {0:s}();", Descriptor->TypeName[0]) : "return nullptr;",
-    //                            Descriptor->HasDestructor() ? std::format("delete ({0:s}*)Object;", Descriptor->TypeName[0]) : "",
-    //                            Descriptor->HasDefaultConstructor() ? std::format("new (ConstructedObject) {0:s}();", Descriptor->TypeName[0]) : "",
-    //                            Descriptor->HasDestructor() ? std::format("reinterpret_cast<{0:s}*>(DestructedObject)->~{0:s}();", Descriptor->TypeName[0]) : "");
-    //for (size_t i = 0; i < Descriptor->Fields.size(); i++)
-    //{
-    //SourceCode += std::format("        Descriptor.Fields[{0:d}].FieldName = \"{1:s}\";\n"
-    //                          "        Descriptor.Fields[{0:d}].FieldOffset = offsetof({2:s},{1:s});\n"
-    //                          "        Descriptor.Fields[{0:d}].Number = {3:d};\n"
-    //                          "        Descriptor.Fields[{0:d}].TypeDescriptor = {4:s}\n"
-    //                          "        Descriptor.Fields[{0:d}].QualifierFlag = {5:#010x};\n", i, Descriptor->Fields[i].FieldName, Descriptor->TypeName[0], Descriptor->Fields[i].Number, 
-    //                            (Descriptor->Fields[i].TypeDescriptor->IsBuiltInType() || (Descriptor->Fields[i].TypeDescriptor->TypeId < ReserveObjectIdEnd)) ?
-    //                            std::format("FTypeDescriptorTable::Get().GetDescriptor({:d}); //{:s}", Descriptor->Fields[i].TypeDescriptor->TypeId, Descriptor->Fields[i].TypeDescriptor->TypeName[0]) :
-    //                            std::format("{:s}::GetTypeDescriptor()", Descriptor->Fields[i].TypeDescriptor->GetTypeName()),
-    //                            Descriptor->Fields[i].QualifierFlag);
-    //}
-    //for (size_t i = 0; i < Descriptor->TypeName.size(); i++)
-    //{
-    //SourceCode += std::format("        Descriptor.TypeName.push_back(\"{:s}\");\n", Descriptor->TypeName[i]);
-    //}
-
-    //SourceCode += std::format("        Descriptor.TypeFlag = {0:#010x};\n"
-    //                          "        return &Descriptor;\n"
-    //                          "    }};\n"
-    //                          "    static FTypeDescriptor* DescriptorPtr = DescriptorInitializer();\n"
-    //                          "    return DescriptorPtr;\n"
-    //                          "}}\n\n", Descriptor->TypeFlag);
-    //SourceCode += std::format("struct F{0:s}DescriptorAutoRegister {{\n"
-    //                          "    F{0:s}DescriptorAutoRegister(){{\n"
-    //                          "        FTypeDescriptor* Descriptor = {0:s}::GetTypeDescriptor();\n"
-    //                          "        int32_t DescriptorId = {0:s}::GetTypeId();\n"
-    //                          "        FTypeDescriptorTable::Get().NameToId.insert(std::make_pair(\"{0:s}\", DescriptorId));\n", Descriptor->TypeName[0]);
-    //                                   for (size_t i = 1; i < Descriptor->TypeName.size(); i++)
-    //                                   {
-    //SourceCode += std::format("            FTypeDescriptorTable::Get().NameToId.insert(std::make_pair(\"{0:s}\", DescriptorId));\n", Descriptor->TypeName[i]);
-    //                                   }
-    //SourceCode += std::format("        if(FTypeDescriptorTable::Get().Descriptors.size() <= DescriptorId){{\n"
-    //                          "            FTypeDescriptorTable::Get().Descriptors.resize(DescriptorId + 1);\n"
-    //                          "        }}\n"
-    //                          "        FTypeDescriptorTable::Get().Descriptors[DescriptorId] = Descriptor;\n"
-    //                          "    }}\n"
-    //                          "}};\n\n"
-    //                          "static F{0:s}DescriptorAutoRegister {0:s}DescriptorAutoRegister;\n\n", Descriptor->TypeName[0]);
     return SourceCode;
 }
 

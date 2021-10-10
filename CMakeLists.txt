@@ -3,7 +3,8 @@ set(LLVM_LINK_COMPONENTS support)
 add_clang_executable(Reflector
   Reflector.cpp
   CodeGenerator.cpp
-  ReflectorModule/Source/Descriptor.cpp
+  ParsingClass.cpp
+  Tool.cpp
   Reflect.cpp
   )
 

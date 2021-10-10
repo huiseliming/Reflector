@@ -1,5 +1,6 @@
 #include "Reflect.h"
 
+FClassTable* GClassTable = &FClassTable::Get();
 
 FClassTable& FClassTable::Get()
 {
@@ -95,12 +96,21 @@ uint32_t FClassTable::RegisterClassToTable(const char* ClassName, FClass* Class)
     return Class->Id;
 }
 
+void FClassTable::Initialize()
+{
+    while (!DeferredRegisterList.empty())
+    {
+        DeferredRegisterList.front()();
+        DeferredRegisterList.pop_front();
+    }
+}
+
 Uint32 FVoid::ClassId = 0;
 #ifdef REFLECT_CODE_GENERATOR
-#define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) Uint32 F##VarName##::ClassId = 0;
+#define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) Uint32 F##VarName::ClassId = 0;
 #else
 #define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) \
-Uint32 F##VarName##::ClassId = 0;\
+Uint32 F##VarName::ClassId = 0;\
 static FClassAutoRegister<F##VarName> F##VarName##ClassAutoRegister;
 #endif
 
