@@ -178,14 +178,10 @@ struct FForwardDeclaredClass : public FClass
 
 struct FEnumClass : public FClass
 {
-	
 	virtual ~FEnumClass(){}
-	virtual const char* GetEnumName() { return ""; }
 	virtual bool IsEnumClass() { return true; }
-#ifdef COMPILE_REFLECTOR
-	std::vector<std::string> OptName;
-	std::vector<Uint64> OptVal;
-#endif
+	virtual const char* ToString(Uint64 In) { return "?*?*?"; };
+	std::vector<std::pair<STRING_TYPE, uint64_t>> Options;
 };
 
 struct FClassTable {
@@ -296,8 +292,13 @@ DEFINE_BUILT_IN_CLASS(Double, double            );
 #pragma pack(pop)
 
 template<typename T>
-struct FClassAutoRegister {
-	FClassAutoRegister()
+struct TEnum {
+	
+};
+
+template<typename T>
+struct TClassAutoRegister {
+	TClassAutoRegister()
 	{
 		const FClass* Class = T::GetClass();
 		T::ClassId = FClassTable::Get().RegisterClassToTable(Class->Name, const_cast<FClass*>(Class));

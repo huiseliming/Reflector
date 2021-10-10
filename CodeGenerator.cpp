@@ -90,8 +90,10 @@ bool CCodeGenerator::Generate()
                 }
                 llvm::outs() << std::format("File<{:s}> generated\n", GeneratedHeaderFile);
                 llvm::outs() << std::format("File<{:s}> generated\n", GeneratedSourceFile);
-                std::string HeaderFileBegin = "#pragma once\n\n";
-                std::string SourceFileBegin = "#include \"" + std::filesystem::path(DeclaredFile).lexically_proximate(std::filesystem::current_path()) .string() + "\"\n\n";
+                std::string HeaderFileBegin = "#pragma once\n";
+                std::string SourceFileBegin = "#include \"" + std::filesystem::path(DeclaredFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n";
+                SourceFileBegin += "#include \"" + std::filesystem::path(GeneratedHeaderFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n\n";
+                HeaderFileBegin += SourceFileBegin;
                 GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
                 GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedSourceFile.write(SourceFileBegin.data(), SourceFileBegin.size());
             }
@@ -119,6 +121,22 @@ bool CCodeGenerator::Generate()
 std::string CCodeGenerator::ToGeneratedHeaderCode(FClass* Class, std::vector<std::string>& DependHeaderFile)
 {
     std::string HeaderCode;
+    HeaderCode.reserve(4 * 1024);
+    if (Class->IsEnumClass()) {
+        FEnumClass* EnumClass = (FEnumClass*)Class;
+        HeaderCode += std::format(
+            "template<>\n"
+            "class TEnum<{0:s}>\n"
+            "{{\n"
+            "public:\n"
+            "    static const FClass* GetClass();\n"
+            "    static Uint32 ClassId;\n"
+            "    {0:s} Data;\n"
+            "}};\n"
+            "static_assert(sizeof(TEnum<{0:s}>) == sizeof({0:s}));\n\n",
+            EnumClass->Name);
+        return HeaderCode;
+    }
     return HeaderCode;
 }
 
@@ -126,54 +144,76 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std
 {
     std::string SourceCode;
     SourceCode.reserve(4*1024);
-    if(Class->IsEnumClass()){
+    if (Class->IsEnumClass()) {
         FEnumClass* EnumClass = (FEnumClass*)Class;
         SourceCode += std::format(
-        "const char* ToString(const {0:s} In)\n"
-        "{{\n"
-        "    switch (In)\n"
-        "    {{\n",
-        EnumClass->Name);
-        for (size_t i = 0; i < EnumClass->OptVal.size(); i++)
-        {
-            SourceCode += std::format(
-        "    case {0:d}:\n"
-        "        return \"{1:s}\";\n",
-            EnumClass->OptVal[i],
-            EnumClass->OptName[i]);
-        }
-        SourceCode += std::format(
-        "        default:\n"
-        "            return \"Undefine\";\n"
-        "    }}\n"
-        "}}\n\n");
-        return SourceCode;
-    }
-    SourceCode += std::format(
-        "const FClass* {0:s}::GetClass()\n"
+        "const FClass* TEnum<{0:s}>::GetClass()\n"
         "{{\n"
         "    static std::function<FClass* ()> ClassInitializer = []() -> FClass* {{\n"
-        "        static struct {0:s}Class : public FClass {{\n",
-        Class->Name
-    );
-    if(Class->HasDefaultConstructor()){
-        SourceCode += std::format(
+        "        static struct {0:s}Class : public FEnumClass {{\n", EnumClass->Name);
+        if (Class->HasDefaultConstructor()) {
+            SourceCode += std::format(
         "            void* New()                    override {{ return new {0:s}(); }}\n"
-        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n", Class->Name);
-    }
-    if (Class->HasDefaultConstructor()) {
-        SourceCode += std::format(
+            , EnumClass->Name);
+        }
+        if (Class->HasDefaultConstructor()) {
+            SourceCode += std::format(
         "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
-        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n", Class->Name);
-    }
-    SourceCode += std::format(
+            , EnumClass->Name);
+        }
+        SourceCode += std::format(
+        "            const char* ToString(Uint64 In) override\n"
+        "            {{\n"
+        "                switch (In)\n"
+        "                {{\n",
+            EnumClass->Name);
+        for (size_t i = 0; i < EnumClass->Options.size(); i++)
+        {
+            SourceCode += std::format(
+        "                case {0:d}:\n"
+        "                    return \"{1:s}\";\n",
+                EnumClass->Options[i].second,
+                EnumClass->Options[i].first);
+        }
+        SourceCode += std::format(
+        "                default:\n"
+        "                    return \"?*?*?\";\n"
+        "                }}\n"
+        "            }}\n\n");
+        SourceCode += std::format(
         "        }} Class{{}};\n"
         "        Class.Name = \"{0:s}\";\n"
         "        Class.Size = sizeof({0:s});\n"
         "        Class.Flag = {1:#010x};\n",
-        Class->Name,
-        Class->Flag
-    );
+            Class->Name,
+            Class->Flag);
+    }else{
+        SourceCode += std::format(
+        "const FClass* {0:s}::GetClass()\n"
+        "{{\n"
+        "    static std::function<FClass* ()> ClassInitializer = []() -> FClass* {{\n"
+        "        static struct {0:s}Class : public FClass {{\n",
+            Class->Name
+        );
+        if(Class->HasDefaultConstructor()){
+            SourceCode += std::format(
+        "            void* New()                    override {{ return new {0:s}(); }}\n"
+        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n", Class->Name);
+        }
+        if (Class->HasDefaultConstructor()) {
+            SourceCode += std::format(
+        "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
+        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n", Class->Name);
+        }
+        SourceCode += std::format(
+        "        }} Class{{}};\n"
+        "        Class.Name = \"{0:s}\";\n"
+        "        Class.Size = sizeof({0:s});\n"
+        "        Class.Flag = {1:#010x};\n",
+            Class->Name,
+            Class->Flag
+        );
+    }
     SourceCode += std::format(
         "        Class.Fields.resize({:d});\n", Class->Fields.size());
     for (size_t i = 0; i < Class->Fields.size(); i++)
@@ -243,12 +283,21 @@ std::string CCodeGenerator::ToGeneratedSourceCode(FClass* Class, std::vector<std
         Class->Name);
 
     // ClassId init must before ClassAutoRegister
+    if (!Class->IsEnumClass()) {
     SourceCode += std::format(
         "Uint32 {0:s}::ClassId = 0;\n\n",
         Class->Name);
     SourceCode += std::format(
-        "static FClassAutoRegister<{0:s}> {0:s}ClassAutoRegister;\n\n",
+        "static TClassAutoRegister<{0:s}> {0:s}ClassAutoRegister;\n\n",
         Class->Name);
+    }else{
+    SourceCode += std::format(
+        "Uint32 TEnum<{0:s}>::ClassId = 0;\n\n",
+        Class->Name);
+    SourceCode += std::format(
+        "static TClassAutoRegister<TEnum<{0:s}>> {0:s}ClassAutoRegister;\n\n",
+        Class->Name);
+    }
     return SourceCode;
 }
 

@@ -125,7 +125,7 @@ Uint32 FVoid::ClassId = 0;
 #else
 #define DEFINE_BUILT_IN_CLASS_MEMBER(VarName) \
 Uint32 F##VarName::ClassId = 0;\
-static FClassAutoRegister<F##VarName> F##VarName##ClassAutoRegister;
+static TClassAutoRegister<F##VarName> F##VarName##ClassAutoRegister;
 #endif
 
 DEFINE_BUILT_IN_CLASS_MEMBER(Bool);

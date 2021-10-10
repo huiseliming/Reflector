@@ -60,7 +60,7 @@ FClass* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* 
             return Class;
         }
     }
-    Class->DeclaredFile = std::string(CurrentSourceFile.data(), CurrentSourceFile.size());
+    Class->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
     // parend class parse
     for (auto BasesIterator = ClassCXXRecordDecl->bases_begin(); BasesIterator != ClassCXXRecordDecl->bases_end(); BasesIterator++)
     {
@@ -295,14 +295,14 @@ FClass* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const
             return Class;
         }
     }
-    Class->DeclaredFile = std::string(CurrentSourceFile.data(), CurrentSourceFile.size());
+    Class->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
     TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(ClassEnumDecl->getTypeForDecl());
     Class->Size = FieldTypeTypeInfo.Width;
     for (auto Iterator = ClassEnumDecl->enumerator_begin(); Iterator != ClassEnumDecl->enumerator_end(); Iterator++)
     {
-        Class->OptName.push_back(Iterator->getNameAsString());
-        Class->OptVal.push_back(Iterator->getInitVal().getZExtValue());
+        Class->Options.push_back(std::make_pair<>(Iterator->getNameAsString(), Iterator->getInitVal().getZExtValue()));
     }
+    Class->Flag |= (kHasDefaultConstructorFlagBit | kHasDestructorFlagBit);
     Class->IsReflectionDataCollectionCompleted = true;
     return Class;
 }
