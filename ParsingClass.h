@@ -2,8 +2,8 @@
 #include "clang/AST/Type.h"
 #include "CodeGenerator.h"
 
-FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const clang::CXXRecordDecl* ClassCXXRecordDecl);
+FClass* ParseReflectCXXRecord(CCodeGenerator& CG, clang::ASTContext* const Context, const clang::CXXRecordDecl* ClassCXXRecordDecl);
 
-FClass* ParseReflectEnum(clang::ASTContext* const Context, const clang::EnumDecl* ClassEnumDecl);
+FClass* ParseReflectEnum(CCodeGenerator& CG, clang::ASTContext* const Context, const clang::EnumDecl* ClassEnumDecl);
 
-FClass* ParseReflectClass(clang::ASTContext* const Context, const clang::TagDecl* ClassTagDecl);
+FClass* ParseReflectClass(CCodeGenerator& CG, clang::ASTContext* const Context, const clang::TagDecl* ClassTagDecl);

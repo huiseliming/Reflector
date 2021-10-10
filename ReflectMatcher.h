@@ -16,9 +16,10 @@ public:
         std::vector<std::string> ReflectAnnotation;
         if (const CXXRecordDecl* CXXRecord = Result.Nodes.getNodeAs<clang::CXXRecordDecl>("Class"))
         {
-            ParseReflectCXXRecord(Result.Context, CXXRecord);
+            ParseReflectCXXRecord(*CodeGenerator, Result.Context, CXXRecord);
         }
     }
+    CCodeGenerator* CodeGenerator;
 };
 
 class ReflectEnumMatcher : public MatchFinder::MatchCallback
@@ -28,7 +29,8 @@ public:
     {
         if (const EnumDecl* EnumNode = Result.Nodes.getNodeAs<clang::EnumDecl>("Enum"))
         {
-            ParseReflectEnum(Result.Context, EnumNode);
+            ParseReflectEnum(*CodeGenerator, Result.Context, EnumNode);
         }
     }
+    CCodeGenerator* CodeGenerator;
 };

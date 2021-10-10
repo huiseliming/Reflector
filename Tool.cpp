@@ -40,15 +40,15 @@ bool FindReflectAnnotation(const clang::Decl* CheckedDecl, const char* FoundMark
     return false;
 }
 
-std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const Decl* D)
-{
-    SourceRange Loc = D->getSourceRange();
-    std::filesystem::path File(Context->getSourceManager().getFilename(Loc.getBegin()).str());
-    if (File.is_absolute())
-        return File.string();
-    else
-        std::filesystem::canonical(std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + File.string())).string();
-}
+//std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const Decl* D)
+//{
+//    SourceRange Loc = D->getSourceRange();
+//    std::filesystem::path File(Context->getSourceManager().getFilename(Loc.getBegin()).str());
+//    if (File.is_absolute())
+//        return File.string();
+//    else
+//        return std::filesystem::canonical(std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + File.string())).string();
+//}
 
 bool IsMatchedCppHeaderAndSource(const char* HeaderFile, uint32_t HeaderFileLength, const char* SourceFile, uint32_t SourceFileLength)
 {

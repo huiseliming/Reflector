@@ -9,11 +9,11 @@ using namespace llvm;
 using namespace clang;
 using namespace clang::tooling;
 
-FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordDecl* ClassCXXRecordDecl)
+FClass* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const CXXRecordDecl* ClassCXXRecordDecl)
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    FClass* Class = FClassTable::Get().GetClass(ClassCXXRecordDecl->getQualifiedNameAsString().c_str());
+    FClass* Class = CodeGenerator.ClassTable.GetClass(ClassCXXRecordDecl->getQualifiedNameAsString().c_str());
     SourceLocation CppFileSourceLocation = ClassCXXRecordDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     while (TempSourceLocation.isValid())
@@ -37,12 +37,12 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
     }
     else
     {
-        if (!FindReflectAnnotation(ClassCXXRecordDecl, "Object", ReflectAnnotation)) return nullptr;
+        if (!FindReflectAnnotation(ClassCXXRecordDecl, "Class", ReflectAnnotation)) return nullptr;
         if (ClassCXXRecordDecl->isClass() || ClassCXXRecordDecl->isStruct()) {
-            CCodeGenerator::Get().GeneratedReflectClasses.emplace_back(std::make_unique<FClass>());
-            CCodeGenerator::Get().GeneratedReflectClasses.back()->Name = ClassCXXRecordDecl->getQualifiedNameAsString();
-            Class = CCodeGenerator::Get().GeneratedReflectClasses.back().get();
-            FClassTable::Get().RegisterClassToTable(Class->Name.c_str(), Class);
+            CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<FClass>());
+            CodeGenerator.GeneratedReflectClasses.back()->Name = ClassCXXRecordDecl->getQualifiedNameAsString();
+            Class = CodeGenerator.GeneratedReflectClasses.back().get();
+            CodeGenerator.ClassTable.RegisterClassToTable(Class->Name.c_str(), Class);
         }
         else if (ClassCXXRecordDecl->isUnion()) {
             SourceRange Loc = ClassCXXRecordDecl->getSourceRange();
@@ -64,13 +64,13 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
     // parend class parse
     for (auto BasesIterator = ClassCXXRecordDecl->bases_begin(); BasesIterator != ClassCXXRecordDecl->bases_end(); BasesIterator++)
     {
-        FClass* ParentClass = ParseReflectCXXRecord(Context, BasesIterator->getType()->getAsCXXRecordDecl());
+        FClass* ParentClass = ParseReflectCXXRecord(CodeGenerator, Context, BasesIterator->getType()->getAsCXXRecordDecl());
         if (!ParentClass)
         {
-            CCodeGenerator::Get().OtherClasses.emplace_back(std::make_unique<FNonReflectClass>());
-            ParentClass = CCodeGenerator::Get().GeneratedReflectClasses.back().get();
+            CodeGenerator.OtherClasses.emplace_back(std::make_unique<FNonReflectClass>());
+            ParentClass = CodeGenerator.GeneratedReflectClasses.back().get();
             ParentClass->Name = BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString();
-            FClassTable::Get().RegisterClassToTable(ParentClass->Name.c_str(), ParentClass);
+            CodeGenerator.ClassTable.RegisterClassToTable(ParentClass->Name.c_str(), ParentClass);
         }
         Class->ParentClasses.push_back(ParentClass);
     }
@@ -98,7 +98,7 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
         }
         QualType ReturnType = Method->getReturnType();
         if (ReturnType->isVoidType()) {
-            Function.Ret.Class = FClassTable::Get().GetClass("void");
+            Function.Ret.Class = CodeGenerator.ClassTable.GetClass("void");
             Function.Ret.Flag = kQualifierNoFlag;
         }
         else {
@@ -200,11 +200,11 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
         }
         if (FieldUnqualifiedType->isBuiltinType())
         {
-            Class->Fields.back().Class = FClassTable::Get().GetClass(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
+            Class->Fields.back().Class = CodeGenerator.ClassTable.GetClass(FieldUnqualifiedType.getCanonicalType().getAsString().c_str());
         }
         else if (FieldUnqualifiedType->isStructureOrClassType() || FieldUnqualifiedType->isEnumeralType())
         {
-            FClass* ParsedClass = ParseReflectClass(Context, FieldUnqualifiedType->getAsCXXRecordDecl());
+            FClass* ParsedClass = ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl());
             if (ParsedClass && ParsedClass->IsReflectClass() && ParsedClass->IsReflectGeneratedClass()) {
                 Class->Fields.back().Class = ParsedClass;
             }
@@ -213,13 +213,13 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
                 auto it = std::find_if(ReflectAnnotation.begin(), ReflectAnnotation.end(), [](std::string& str) { return 0 == strncmp(str.c_str(), "ReflectClass=", sizeof("ReflectClass=") - 1); });
                 if (std::end(ReflectAnnotation) != it) {
                     std::string ReflectObjectName = it->substr(sizeof("ReflectClass=") - 1);
-                    FClass* UserWritedReflectClass = FClassTable::Get().GetClass(ReflectObjectName.c_str());
+                    FClass* UserWritedReflectClass = CodeGenerator.ClassTable.GetClass(ReflectObjectName.c_str());
                     if (nullptr == UserWritedReflectClass) {
-                        CCodeGenerator::Get().OtherClasses.emplace_back(std::make_unique<FClass>());
-                        UserWritedReflectClass = CCodeGenerator::Get().OtherClasses.back().get();
+                        CodeGenerator.OtherClasses.emplace_back(std::make_unique<FClass>());
+                        UserWritedReflectClass = CodeGenerator.OtherClasses.back().get();
                         UserWritedReflectClass->Name = ReflectObjectName;
                         UserWritedReflectClass->Flag |= kUserWritedReflectClassFlagBit;
-                        FClassTable::Get().RegisterClassToTable(ReflectObjectName.c_str(), UserWritedReflectClass);
+                        CodeGenerator.ClassTable.RegisterClassToTable(ReflectObjectName.c_str(), UserWritedReflectClass);
                     }
                     Class->Fields.back().Class = UserWritedReflectClass;
                 }
@@ -228,12 +228,12 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
                     std::string ForwardDeclaredClassName = FieldUnqualifiedType->getAsCXXRecordDecl()->getNameAsString().c_str();
                     if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (Class->Fields.back().IsPointerType() || Class->Fields.back().IsReferenceType()))
                     {
-                        FClass* ForwardDeclaredClass = FClassTable::Get().GetClass(ForwardDeclaredClassName.c_str());
+                        FClass* ForwardDeclaredClass = CodeGenerator.ClassTable.GetClass(ForwardDeclaredClassName.c_str());
                         if (nullptr == ForwardDeclaredClass) {
-                            CCodeGenerator::Get().OtherClasses.emplace_back(std::make_unique<FForwardDeclaredClass>());
-                            ForwardDeclaredClass = CCodeGenerator::Get().OtherClasses.back().get();
+                            CodeGenerator.OtherClasses.emplace_back(std::make_unique<FForwardDeclaredClass>());
+                            ForwardDeclaredClass = CodeGenerator.OtherClasses.back().get();
                             ForwardDeclaredClass->Name = ForwardDeclaredClassName;
-                            FClassTable::Get().RegisterClassToTable(ForwardDeclaredClassName.c_str(), ForwardDeclaredClass);
+                            CodeGenerator.ClassTable.RegisterClassToTable(ForwardDeclaredClassName.c_str(), ForwardDeclaredClass);
                         }
                         Class->Fields.back().Class = ForwardDeclaredClass;
                     }
@@ -241,7 +241,7 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
                     {
                         SourceRange Loc = Field->getSourceRange();
                         PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                        llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is object\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                        llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is class\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
                         return nullptr;
                     }
                 }
@@ -261,11 +261,11 @@ FClass* ParseReflectCXXRecord(clang::ASTContext* const Context, const CXXRecordD
     return Class;
 }
 
-FClass* ParseReflectEnum(clang::ASTContext* const Context, const EnumDecl* ClassEnumDecl)
+FClass* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const EnumDecl* ClassEnumDecl)
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    FEnumClass* Class = (FEnumClass*)FClassTable::Get().GetClass(ClassEnumDecl->getQualifiedNameAsString().c_str());
+    FEnumClass* Class = (FEnumClass*)CodeGenerator.ClassTable.GetClass(ClassEnumDecl->getQualifiedNameAsString().c_str());
 
     SourceLocation CppFileSourceLocation = ClassEnumDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
@@ -287,15 +287,15 @@ FClass* ParseReflectEnum(clang::ASTContext* const Context, const EnumDecl* Class
     {
         if (!FindReflectAnnotation(ClassEnumDecl, "Enum", ReflectAnnotation)) return nullptr;
         assert(ClassEnumDecl->isEnum());
-        CCodeGenerator::Get().GeneratedReflectClasses.emplace_back(std::make_unique<FEnumClass>());
-        CCodeGenerator::Get().GeneratedReflectClasses.back()->Name = ClassEnumDecl->getQualifiedNameAsString();
-        Class = (FEnumClass*)CCodeGenerator::Get().GeneratedReflectClasses.back().get();
-        FClassTable::Get().RegisterClassToTable(Class->Name.c_str(), Class);
+        CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<FEnumClass>());
+        CodeGenerator.GeneratedReflectClasses.back()->Name = ClassEnumDecl->getQualifiedNameAsString();
+        Class = (FEnumClass*)CodeGenerator.GeneratedReflectClasses.back().get();
+        CodeGenerator.ClassTable.RegisterClassToTable(Class->Name.c_str(), Class);
         if (!NeedReflectClass) {
             return Class;
         }
     }
-    Class->DeclaredFile = GetDeclFileAbsPath(Context, ClassEnumDecl);
+    Class->DeclaredFile = std::string(CurrentSourceFile.data(), CurrentSourceFile.size());
     TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(ClassEnumDecl->getTypeForDecl());
     Class->Size = FieldTypeTypeInfo.Width;
     for (auto Iterator = ClassEnumDecl->enumerator_begin(); Iterator != ClassEnumDecl->enumerator_end(); Iterator++)
@@ -307,11 +307,11 @@ FClass* ParseReflectEnum(clang::ASTContext* const Context, const EnumDecl* Class
     return Class;
 }
 
-FClass* ParseReflectClass(clang::ASTContext* const Context, const TagDecl* ClassTagDecl)
+FClass* ParseReflectClass(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const TagDecl* ClassTagDecl)
 {
     const CXXRecordDecl* ClassCXXRecordDecl = dyn_cast<CXXRecordDecl>(ClassTagDecl);
-    if (ClassCXXRecordDecl) return ParseReflectCXXRecord(Context, ClassCXXRecordDecl);
+    if (ClassCXXRecordDecl) return ParseReflectCXXRecord(CodeGenerator, Context, ClassCXXRecordDecl);
     const EnumDecl* ClassEnumDecl = dyn_cast<EnumDecl>(ClassTagDecl);
-    if (ClassEnumDecl) return ParseReflectEnum(Context, ClassEnumDecl);
+    if (ClassEnumDecl) return ParseReflectEnum(CodeGenerator, Context, ClassEnumDecl);
     return nullptr;
 }

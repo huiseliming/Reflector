@@ -49,11 +49,11 @@ std::string GetExeDir()
     return executeFileDir;
 }
 
-CCodeGenerator& CCodeGenerator::Get()
-{
-    static CCodeGenerator CodeGenerator;
-    return CodeGenerator;
-}
+//CCodeGenerator& CCodeGenerator::Get()
+//{
+//    static CCodeGenerator CodeGenerator;
+//    return CodeGenerator;
+//}
 
 bool CCodeGenerator::Generate()
 {

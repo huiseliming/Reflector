@@ -9,13 +9,13 @@
 
 
 #ifdef __REFLECTOR__
-#define REFLECT_OBJECT(...) __attribute__((annotate("Object"   __VA_OPT__(",") #__VA_ARGS__)))
-#define REFLECT_ENUM(...)   __attribute__((annotate("Enum"     __VA_OPT__(",") #__VA_ARGS__)))
-#define PROPERTY(...)       __attribute__((annotate("Property" __VA_OPT__(",") #__VA_ARGS__)))
-#define FUNCTION(...)       __attribute__((annotate("Function" __VA_OPT__(",") #__VA_ARGS__)))
+#define CLASS(...)     __attribute__((annotate("Class"    __VA_OPT__(",") #__VA_ARGS__)))
+#define ENUM(...)      __attribute__((annotate("Enum"     __VA_OPT__(",") #__VA_ARGS__)))
+#define PROPERTY(...)  __attribute__((annotate("Property" __VA_OPT__(",") #__VA_ARGS__)))
+#define FUNCTION(...)  __attribute__((annotate("Function" __VA_OPT__(",") #__VA_ARGS__)))
 #else
-#define REFLECT_OBJECT(...)
-#define REFLECT_ENUM(...)
+#define CLASS(...)
+#define ENUM(...)
 #define PROPERTY(...)
 #define FUNCTION(...)
 #endif
@@ -26,11 +26,11 @@ static const FClass* GetClass();\
 static Uint32 ClassId;
 
 
-#ifdef REFLECT_CODE_GENERATOR
+#ifdef COMPILE_REFLECTOR
 #define STRING_TYPE std::string
 #else
 #define STRING_TYPE const char *
-#endif // REFLECT_CODE_GENERATOR
+#endif // COMPILE_REFLECTOR
 
 typedef void               Void;
 typedef bool               Bool;
@@ -102,7 +102,7 @@ struct FField
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 	size_t Offset{ 0 };
 	size_t Number{ 1 };
-//#ifdef REFLECT_CODE_GENERATOR
+//#ifdef COMPILE_REFLECTOR
 //	STRING_TYPE ClassName {""};
 //#endif
 
@@ -135,15 +135,15 @@ struct FClass
 	std::vector<STRING_TYPE> Alias;
 	std::vector<const FClass*> ParentClasses;
 	Uint32 Id{ 0 };
-#ifdef REFLECT_CODE_GENERATOR
+#ifdef COMPILE_REFLECTOR
 	std::string DeclaredFile;
-	virtual bool IsReflectClass() { return true; }
 	bool IsReflectionDataCollectionCompleted{ false };
-#endif // REFLECT_CODE_GENERATOR
+	virtual bool IsReflectClass() { return true; }
+	virtual bool IsForwardDeclaredClass() { return false; }
+#endif // COMPILE_REFLECTOR
 
 	virtual bool IsBuiltInType() { return false; }
 	virtual bool IsEnumClass() { return false; }
-	virtual bool IsForwardDeclaredClass() { return false; }
 
 
 	bool HasDefaultConstructor() { return Flag & kHasDefaultConstructorFlagBit; }
@@ -163,7 +163,7 @@ struct FClass
 };
 
 
-#ifdef REFLECT_CODE_GENERATOR
+#ifdef COMPILE_REFLECTOR
 struct FNonReflectClass : public FClass
 {
 	virtual bool IsReflectClass() { return false; }
@@ -174,7 +174,7 @@ struct FForwardDeclaredClass : public FClass
 	bool IsForwardDeclaredClass() { return true; }
 };
 
-#endif // REFLECT_CODE_GENERATOR
+#endif // COMPILE_REFLECTOR
 
 struct FEnumClass : public FClass
 {
@@ -182,22 +182,22 @@ struct FEnumClass : public FClass
 	virtual ~FEnumClass(){}
 	virtual const char* GetEnumName() { return ""; }
 	virtual bool IsEnumClass() { return true; }
-#ifdef REFLECT_CODE_GENERATOR
+#ifdef COMPILE_REFLECTOR
 	std::vector<std::string> OptName;
 	std::vector<Uint64> OptVal;
 #endif
 };
 
 struct FClassTable {
-protected:
-	FClassTable() = default;
 public:
+	FClassTable();
 	std::unordered_map<std::string, int32_t> NameToId;
 	std::vector<FClass*> Classes;
 	std::atomic<int32_t> IdCounter{ 1 };
 	std::list<std::function<bool()>> DeferredRegisterList;
 
 	static FClassTable& Get();
+
 	FClass* GetClass(const char* ClassName);
 	FClass* GetClass(Uint32 ClassId);
 	uint32_t RegisterClassToTable(const char* TypeName, FClass* Class);
@@ -220,7 +220,9 @@ public:
 /** 
  * can be used after global initialization is complete
 **/
+#ifndef COMPILE_REFLECTOR
 extern FClassTable* GClassTable;
+#endif
 
 #pragma pack (push,1)
 
@@ -259,7 +261,7 @@ struct F##VarName                                                               
 			static struct F##VarNameClass : public FClass {                                            \
 				bool IsBuiltInType()                      override { return true; }                    \
 				void* New()                               override { return new BuiltInType; }         \
-				void Delete(void* Object)                 override { delete (BuiltInType*)Object; } \
+				void Delete(void* Object)                 override { delete (BuiltInType*)Object; }    \
 				void Constructor(void* ConstructedObject) override { }                                 \
 				void Destructor(void* DestructedObject)   override { }                                 \
 			} Class{};                                                                                 \

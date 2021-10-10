@@ -59,7 +59,7 @@ static cl::extrahelp CommonHelp(ReflectGeneratorHelpMessage);
 //static cl::extrahelp MoreHelp("\n  \n");
 
 bool ParseFailed = false;
-
+#include <thread>
 int main(int argc, const char **argv) {
     std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
     
@@ -88,63 +88,90 @@ int main(int argc, const char **argv) {
     //    }
     //}
     std::vector<CompileCommand> CompileCommands = OptionsParser.getCompilations().getAllCompileCommands();
+    std::string BuildPath;
     if(CompileCommands.size() > 0)
     {
-        CCodeGenerator::Get().BuildPath = CompileCommands[0].Directory;
+        BuildPath = CompileCommands[0].Directory;
     }
     OptionsParser.getArgumentsAdjuster();
-    ClangTool Tool(OptionsParser.getCompilations(),
-                    OptionsParser.getSourcePathList());
-    clang::ast_matchers::MatchFinder Finder;
-    ReflectEnumMatcher EnumMatcher;
-    Finder.addMatcher(enumDecl(hasAttr(attr::Annotate)).bind("Enum"), &EnumMatcher);
-    ReflectClassMatcher ClassMatcher;
-    Finder.addMatcher(cxxRecordDecl(hasAttr(attr::Annotate)).bind("Class"), &ClassMatcher);
+    const std::vector<std::string> SourcePathList = OptionsParser.getSourcePathList();
+    std::vector<std::thread> Threads;
+    bool MT = false;
+    for (size_t i = 0; i < SourcePathList.size(); i++)
+    {
+        std::function<void()> Task = [&] {
+            std::vector<std::string> Source;
+            Source.push_back(SourcePathList[i]);
+            ClangTool Tool(OptionsParser.getCompilations(), Source);
+            CCodeGenerator CG;
+            CG.BuildPath = BuildPath;
+            clang::ast_matchers::MatchFinder Finder;
+            ReflectEnumMatcher EnumMatcher;
+            EnumMatcher.CodeGenerator = &CG;
+            Finder.addMatcher(enumDecl(hasAttr(attr::Annotate)).bind("Enum"), &EnumMatcher);
+            ReflectClassMatcher ClassMatcher;
+            ClassMatcher.CodeGenerator = &CG;
+            Finder.addMatcher(cxxRecordDecl(hasAttr(attr::Annotate)).bind("Class"), &ClassMatcher);
 
-    Tool.appendArgumentsAdjuster([](const CommandLineArguments& CmdArg, StringRef Filename)
-        -> CommandLineArguments
+            Tool.appendArgumentsAdjuster([](const CommandLineArguments& CmdArg, StringRef Filename)
+                -> CommandLineArguments
+                {
+                    auto NewCmdArg = CmdArg;
+                    NewCmdArg.erase(std::remove(NewCmdArg.begin(), NewCmdArg.end(), "/MP"), NewCmdArg.end());
+                    std::vector<std::string> AddArgs;
+                    //AddArgs.push_back("-Wdeprecated-enum-enum-conversion");
+                    //AddArgs.push_back("-Wpessimizing-move");
+                    //AddArgs.push_back("-Wunused-const-variable");
+                    bool NoWarningIsSet = false;;
+                    std::for_each(NewCmdArg.begin(), NewCmdArg.end(), [&](std::string& Str) {
+                        if (0 == strncmp(Str.data(), "/W", 2)) {
+                            Str[2] = '0';
+                            NoWarningIsSet = true;
+                        }
+                        for (auto Iterator = AddArgs.begin(); Iterator != AddArgs.end(); ) {
+                            if (Str == *Iterator) {
+                                Iterator = AddArgs.erase(Iterator);
+                            }
+                            else {
+                                Iterator++;
+                            }
+                        }
+                    });
+                    std::for_each(AddArgs.begin(), AddArgs.end(), [&] (std::string& Str) { NewCmdArg.insert(++NewCmdArg.begin(),Str); });
+                    NewCmdArg.insert(++NewCmdArg.begin(), "-D__REFLECTOR__");
+                    if(!NoWarningIsSet){
+                        NewCmdArg.insert(++NewCmdArg.begin(), "/W0");
+                    }
+                    for (size_t i = 0; i < NewCmdArg.size(); i++) {
+                        llvm::outs() << NewCmdArg[i] << " ";
+                    }
+                    llvm::outs() << "\n";
+                    return NewCmdArg;
+                });
+            int Result = Tool.run(newFrontendActionFactory(&Finder).get());
+            if(Result != 0){
+                llvm::errs() << std::format("Parsing reflect object failed\n");
+                std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
+                llvm::errs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
+                return 1;
+            }
+            CG.Generate();
+        };
+        if(MT){
+            Threads.emplace_back(std::thread(std::move(Task)));
+        }
+        else
         {
-            auto NewCmdArg = CmdArg;
-            NewCmdArg.erase(std::remove(NewCmdArg.begin(), NewCmdArg.end(), "/MP"), NewCmdArg.end());
-            std::vector<std::string> AddArgs;
-            //AddArgs.push_back("-Wdeprecated-enum-enum-conversion");
-            //AddArgs.push_back("-Wpessimizing-move");
-            //AddArgs.push_back("-Wunused-const-variable");
-            bool NoWarningIsSet = false;;
-            std::for_each(NewCmdArg.begin(), NewCmdArg.end(), [&](std::string& Str) {
-                if (0 == strncmp(Str.data(), "/W", 2)) {
-                    Str[2] = '0';
-                    NoWarningIsSet = true;
-                }
-                for (auto Iterator = AddArgs.begin(); Iterator != AddArgs.end(); ) {
-                    if (Str == *Iterator) {
-                        Iterator = AddArgs.erase(Iterator);
-                    }
-                    else {
-                        Iterator++;
-                    }
-                }
-            });
-            std::for_each(AddArgs.begin(), AddArgs.end(), [&] (std::string& Str) { NewCmdArg.insert(++NewCmdArg.begin(),Str); });
-            NewCmdArg.insert(++NewCmdArg.begin(), "-D__REFLECTOR__");
-            if(!NoWarningIsSet){
-                NewCmdArg.insert(++NewCmdArg.begin(), "/W0");
-            }
-            for (size_t i = 0; i < NewCmdArg.size(); i++) {
-                llvm::outs() << NewCmdArg[i] << " ";
-            }
-            llvm::outs() << "\n";
-            return NewCmdArg;
-        });
-    int Result = Tool.run(newFrontendActionFactory(&Finder).get());
-    if(Result == 0 && !ParseFailed){
-        CCodeGenerator::Get().Generate();
-        std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
-        llvm::outs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
-        return 0;
+            Task();
+        }
     }
-    llvm::errs() << std::format("Parsing reflect object failed\n");
+    if (MT) {
+        for (size_t i = 0; i < Threads.size(); i++)
+        {
+            Threads[i].join();
+        }
+    }
     std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
-    llvm::errs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
-    return 1;
+    llvm::outs() << std::format("Parsing reflect object in {:f} seconds\n", std::chrono::duration<double>(End - Start).count());
+    return 0;
 }
