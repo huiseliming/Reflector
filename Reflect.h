@@ -6,7 +6,11 @@
 #include <cassert>
 #include <functional>
 #include <unordered_map>
-
+#ifdef CORE_MODULE
+#include "CoreApi.h"
+#else
+#define CORE_API
+#endif
 
 #ifdef __REFLECTOR__
 #define CLASS(...)     __attribute__((annotate("Class"    __VA_OPT__(",") #__VA_ARGS__)))
@@ -69,24 +73,28 @@ enum EQualifierFlag :Uint32 {
 	kConstPointerFlagBit = 1 << 3,
 
 };
-
-struct FParameter 
+#ifdef CORE_MODULE
+// disable warning 4251
+#pragma warning(push)
+#pragma warning (disable: 4251)
+#endif
+struct CORE_API FParameter
 {
 	const FClass* Class{ nullptr };
 	STRING_TYPE Name{ "" };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 };
 
-struct FRetVal
+struct CORE_API FRetVal
 {
 	const FClass* Class{ nullptr };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 };
 
-struct FFunction {
-	STRING_TYPE Name{""};
-	void *Ptr{nullptr};
-	const FClass* OwnerClass{nullptr}; //  Owner {Class | Struct} TypeDescriptor
+struct CORE_API FFunction {
+	STRING_TYPE Name{ "" };
+	void* Ptr{ nullptr };
+	const FClass* OwnerClass{ nullptr }; //  Owner {Class | Struct} TypeDescriptor
 	FRetVal Ret;
 	std::vector<FParameter> Args;
 	Uint32 Flag{ kFunctionNoFlag }; //EFunctionFlag
@@ -95,22 +103,22 @@ struct FFunction {
 	bool IsStaticFunction() { return Flag & kStaticFlagBit; }
 };
 
-struct FField
+struct CORE_API FField
 {
 	STRING_TYPE Name{ "" };
 	const FClass* Class{ nullptr };
 	Uint32 Flag{ kQualifierNoFlag }; // EQualifierFlag
 	size_t Offset{ 0 };
 	size_t Number{ 1 };
-//#ifdef COMPILE_REFLECTOR
-//	STRING_TYPE ClassName {""};
-//#endif
+	//#ifdef COMPILE_REFLECTOR
+	//	STRING_TYPE ClassName {""};
+	//#endif
 
 
-	bool IsNoQualifierType()  { return Flag == kQualifierNoFlag; }
-	bool IsPointerType()      { return Flag & kPointerFlagBit; }
-	bool IsReferenceType()    { return Flag & kReferenceFlagBit; }
-	bool IsConstValueType()   { return Flag & kConstValueFlagBit; }
+	bool IsNoQualifierType() { return Flag == kQualifierNoFlag; }
+	bool IsPointerType() { return Flag & kPointerFlagBit; }
+	bool IsReferenceType() { return Flag & kReferenceFlagBit; }
+	bool IsConstValueType() { return Flag & kConstValueFlagBit; }
 	bool IsConstPointerType() { return Flag & kConstPointerFlagBit; }
 
 	template<typename T>
@@ -125,9 +133,9 @@ struct FField
 
 // 功能描述对象
 
-struct FClass 
+struct CORE_API FClass
 {
-	STRING_TYPE Name {""};
+	STRING_TYPE Name{ "" };
 	size_t Size{ 0 };
 	Uint32 Flag{ kClassNoFlag }; // EClassFlag
 	std::vector<FField> Fields;
@@ -176,15 +184,15 @@ struct FForwardDeclaredClass : public FClass
 
 #endif // COMPILE_REFLECTOR
 
-struct FEnumClass : public FClass
+struct CORE_API FEnumClass : public FClass
 {
-	virtual ~FEnumClass(){}
+	virtual ~FEnumClass() {}
 	virtual bool IsEnumClass() { return true; }
 	virtual const char* ToString(Uint64 In) { return "?*?*?"; };
 	std::vector<std::pair<STRING_TYPE, uint64_t>> Options;
 };
 
-struct FClassTable {
+struct CORE_API FClassTable {
 public:
 	FClassTable();
 	std::unordered_map<std::string, int32_t> NameToId;
@@ -201,8 +209,8 @@ public:
 	/**
 	 * must be called after global initialization is complete and before use,
 	 * this function will defer registration
-	 * 
-	 * exmaple: 
+	 *
+	 * exmaple:
 	 * int main(int argc, const char* argv[])
 	 * {
 	 *     GClassTable->Initialize();
@@ -213,17 +221,16 @@ public:
 	void Initialize();
 };
 
-/** 
+/**
  * can be used after global initialization is complete
 **/
 #ifndef COMPILE_REFLECTOR
-extern FClassTable* GClassTable;
+extern CORE_API FClassTable* GClassTable;
 #endif
 
 #pragma pack (push,1)
 
-
-struct FVoid
+struct CORE_API FVoid
 {
 	static const FClass* GetClass()
 	{
@@ -248,7 +255,7 @@ struct FVoid
 };
 
 #define DEFINE_BUILT_IN_CLASS(VarName, BuiltInType)                                                    \
-struct F##VarName                                                                                      \
+struct CORE_API F##VarName                                                                             \
 {                                                                                                      \
 	static const FClass* GetClass()                                                                    \
 	{                                                                                                  \
@@ -275,25 +282,29 @@ struct F##VarName                                                               
 
 
 
-DEFINE_BUILT_IN_CLASS(Bool  , bool              );
-DEFINE_BUILT_IN_CLASS(Int8  , char              );
-DEFINE_BUILT_IN_CLASS(Uint8 , unsigned char     );
-DEFINE_BUILT_IN_CLASS(Int16 , short             );
-DEFINE_BUILT_IN_CLASS(Uint16, unsigned short    );
-DEFINE_BUILT_IN_CLASS(Int32 , int               );
-DEFINE_BUILT_IN_CLASS(Uint32, unsigned int      );
-DEFINE_BUILT_IN_CLASS(Int64 , long long         );
+DEFINE_BUILT_IN_CLASS(Bool, bool);
+DEFINE_BUILT_IN_CLASS(Int8, char);
+DEFINE_BUILT_IN_CLASS(Uint8, unsigned char);
+DEFINE_BUILT_IN_CLASS(Int16, short);
+DEFINE_BUILT_IN_CLASS(Uint16, unsigned short);
+DEFINE_BUILT_IN_CLASS(Int32, int);
+DEFINE_BUILT_IN_CLASS(Uint32, unsigned int);
+DEFINE_BUILT_IN_CLASS(Int64, long long);
 DEFINE_BUILT_IN_CLASS(Uint64, unsigned long long);
-DEFINE_BUILT_IN_CLASS(Float , float             );
-DEFINE_BUILT_IN_CLASS(Double, double            );
+DEFINE_BUILT_IN_CLASS(Float, float);
+DEFINE_BUILT_IN_CLASS(Double, double);
 
 #undef DEFINE_BUILT_IN_CLASS
 
 #pragma pack(pop)
 
+#ifdef CORE_MODULE
+#pragma warning(pop)
+#endif
+
 template<typename T>
 struct TEnum {
-	
+
 };
 
 template<typename T>

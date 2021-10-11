@@ -8,6 +8,7 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "CodeGenerator.h"
 #include "ReflectMatcher.h"
+#include <thread>
 
 using namespace clang::tooling;
 using namespace llvm;
@@ -58,11 +59,10 @@ static cl::extrahelp CommonHelp(ReflectGeneratorHelpMessage);
 // A help message for this specific tool can be added afterwards.
 //static cl::extrahelp MoreHelp("\n  \n");
 
-bool ParseFailed = false;
-#include <thread>
 int main(int argc, const char **argv) {
     std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
-    
+    llvm::outs() << "start parsing reflect object\n";
+
     auto ExpectedParser = CommonOptionsParser::create(argc, argv, MyToolCategory, cl::NumOccurrencesFlag::OneOrMore);
     if (!ExpectedParser) {
         // Fail gracefully for unsupported options.
