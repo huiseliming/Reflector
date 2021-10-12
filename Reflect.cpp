@@ -16,7 +16,7 @@ CClassTable& CClassTable::Get()
     return *ClassTablePtr;
 }
 
-CField* CClassTable::GetClass(const char* ClassName)
+CMeta* CClassTable::GetClass(const char* ClassName)
 {
     auto NameToIdIterator = NameToId.find(ClassName);
     if (NameToIdIterator != NameToId.end())
@@ -24,14 +24,14 @@ CField* CClassTable::GetClass(const char* ClassName)
     return nullptr;
 }
 
-CField* CClassTable::GetClass(Uint32 ClassId)
+CMeta* CClassTable::GetClass(Uint32 ClassId)
 {
     if (ClassId < Classes.size())
     	return Classes[ClassId];
     return nullptr;
 }
 
-uint32_t CClassTable::RegisterClassToTable(const char* ClassName, CField* Class)
+uint32_t CClassTable::RegisterClassToTable(const char* ClassName, CMeta* Class)
 {
     assert(Class != nullptr);
     assert(std::end(NameToId) == NameToId.find(ClassName));

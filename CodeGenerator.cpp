@@ -1,145 +1,248 @@
-//#include "CodeGenerator.h"
-//#include "llvm/Support/raw_ostream.h"
-//#include <fstream>
-//#include <filesystem>
-//
-//#ifdef _WIN32
-//#include <Windows.h>
-//#endif
-//
-//
-//
-//std::string GetExePath()
-//{
-//#ifdef _WIN32
-//    char result[MAX_PATH];
-//    return std::string(result, GetModuleFileNameA(NULL, result, MAX_PATH));
-//#elif __APPLE__
-//    char result[PATH_MAX];
-//    uint32_t size = 0;
-//    assert(0 != _NSGetExecutablePath(nullptr, &size));
-//    char* buffer = new char[size + 1];
-//    assert(0 == _NSGetExecutablePath(buffer, &size));
-//    char buf[PATH_MAX]; /* PATH_MAX incudes the \0 so +1 is not required */
-//    realpath(buffer, result);
-//    if (!realpath(buffer, result)) {
-//        delete[] buffer;
-//        return "";
-//    }
-//    delete[] buffer;
-//    return result;
-//#else
-//    char result[PATH_MAX];
-//    size_t count = readlink("/proc/self/exe", result, PATH_MAX);
-//    return std::string(result, (count > 0) ? count : 0);
-//#endif
-//}
-//
-//
-//std::string GetExeDir()
-//{
-//    std::string executeFileDir;
-//    std::string executeFilePath = GetExePath();
-//    if (!executeFilePath.empty()) {
-//        std::size_t pos = executeFilePath.find_last_of("/\\");
-//        if (pos != std::string::npos) {
-//            executeFileDir = executeFilePath.substr(0ul, pos);
-//        }
-//    }
-//    return executeFileDir;
-//}
-//
-////CCodeGenerator& CCodeGenerator::Get()
-////{
-////    static CCodeGenerator CodeGenerator;
-////    return CodeGenerator;
-////}
-//
-//bool CCodeGenerator::Generate()
-//{
-//    struct FGeneratedFileContext {
-//        std::list<CClass*> Classes;
-//        std::fstream GeneratedSourceFile;
-//        std::fstream GeneratedHeaderFile;
-//    };
-//    std::vector<std::unique_ptr<CClass>>& Classes = GeneratedReflectClasses;
-//    std::unordered_map<std::string, FGeneratedFileContext> GeneratedFileContextMap;
-//    for (size_t i = 0; i < Classes.size(); i++)
-//    {
-//        if (Classes[i]->IsReflectionDataCollectionCompleted && !Classes[i]->DeclaredFile.empty())
-//        {
-//            if (std::end(GeneratedFileContextMap) == GeneratedFileContextMap.find(Classes[i]->DeclaredFile)) {
-//                GeneratedFileContextMap.insert(std::make_pair<>(Classes[i]->DeclaredFile, FGeneratedFileContext()));
-//                std::string DeclaredFile = Classes[i]->DeclaredFile;
-//                std::size_t Pos = DeclaredFile.find_last_of("/\\");
-//                std::string DeclaredPath = DeclaredFile.substr(0, Pos);
-//                std::string Filename = DeclaredFile.substr(Pos + 1);
-//                std::size_t DotPos = Filename.rfind(".");
-//                std::string FilenameNotDotH = Filename.substr(0, DotPos);
-//                std::string GeneratedHeaderFile = std::filesystem::current_path().string() + "/" + FilenameNotDotH + ".reflect.h";
-//                std::string GeneratedSourceFile = std::filesystem::current_path().string() + "/" + FilenameNotDotH + ".reflect.cpp";
-//                GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedHeaderFile.open(GeneratedHeaderFile, std::ios::out | std::ios::trunc);
-//                GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedSourceFile.open(GeneratedSourceFile, std::ios::out | std::ios::trunc);
-//                if (!GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedHeaderFile.is_open()) {
-//                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedHeaderFile);
-//                    return false;
-//                }
-//                if (!GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedSourceFile.is_open()) {
-//                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedSourceFile);
-//                    return false;
-//                }
-//                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedHeaderFile);
-//                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedSourceFile);
-//                std::string HeaderFileBegin = "#pragma once\n";
-//                std::string SourceFileBegin = "#include \"" + std::filesystem::path(DeclaredFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n";
-//                SourceFileBegin += "#include \"" + std::filesystem::path(GeneratedHeaderFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n\n";
-//                HeaderFileBegin += SourceFileBegin;
-//                GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
-//                GeneratedFileContextMap[Classes[i]->DeclaredFile].GeneratedSourceFile.write(SourceFileBegin.data(), SourceFileBegin.size());
-//            }
-//            GeneratedFileContextMap[Classes[i]->DeclaredFile].Classes.push_back(Classes[i].get());
-//        }
-//    }
-//    for (auto GeneratedFileContextIterator = GeneratedFileContextMap.begin(); GeneratedFileContextIterator != GeneratedFileContextMap.end(); GeneratedFileContextIterator++)
-//    {
-//        std::vector<std::string> HeaderDependHeaderFile;
-//        std::vector<std::string> SourceDependHeaderFile;
-//        for (auto Iterator = GeneratedFileContextIterator->second.Classes.begin(); Iterator != GeneratedFileContextIterator->second.Classes.end(); Iterator++)
-//        {
-//            std::string GeneratedHeaderCode = ToGeneratedHeaderCode(*Iterator, HeaderDependHeaderFile);
-//            std::string GeneratedSourceCode = ToGeneratedSourceCode(*Iterator, SourceDependHeaderFile);
-//            GeneratedFileContextIterator->second.GeneratedHeaderFile.write(GeneratedHeaderCode.data(), GeneratedHeaderCode.size());
-//            GeneratedFileContextIterator->second.GeneratedSourceFile.write(GeneratedSourceCode.data(), GeneratedSourceCode.size());
-//        }
-//        
-//        GeneratedFileContextIterator->second.GeneratedHeaderFile.close();
-//        GeneratedFileContextIterator->second.GeneratedSourceFile.close();
-//    }
-//    return true;
-//}
-//
-//std::string CCodeGenerator::ToGeneratedHeaderCode(CClass* Class, std::vector<std::string>& DependHeaderFile)
-//{
-//    std::string HeaderCode;
-//    HeaderCode.reserve(4 * 1024);
-//    if (Class->IsEnumClass()) {
-//        FEnumClass* EnumClass = (FEnumClass*)Class;
-//        HeaderCode += std::format(
-//            "template<>\n"
-//            "class TEnum<{0:s}>\n"
-//            "{{\n"
-//            "public:\n"
-//            "    static const CClass* GetClass();\n"
-//            "    static Uint32 ClassId;\n"
-//            "    {0:s} Data;\n"
-//            "}};\n"
-//            "static_assert(sizeof(TEnum<{0:s}>) == sizeof({0:s}));\n\n",
-//            EnumClass->Name);
-//        return HeaderCode;
-//    }
-//    return HeaderCode;
-//}
-//
+#include "CodeGenerator.h"
+#include <fstream>
+#include <filesystem>
+#include "clang/Tooling/Tooling.h"
+
+using namespace llvm;
+using namespace clang;
+
+bool CCodeGenerator::Generate()
+{
+    struct FGeneratedFileContext {
+        std::list<CMeta*> FieldClassList;
+        std::fstream GeneratedSourceFile;
+        std::fstream GeneratedHeaderFile;
+    };
+    std::vector<std::unique_ptr<CMeta>>& FieldClasses = GeneratedReflectClasses;
+    std::unordered_map<std::string, FGeneratedFileContext> GeneratedFileContextMap;
+    for (size_t i = 0; i < FieldClasses.size(); i++)
+    {
+        if (FieldClasses[i]->IsReflectionDataCollectionCompleted && !FieldClasses[i]->DeclaredFile.empty())
+        {
+            if (std::end(GeneratedFileContextMap) == GeneratedFileContextMap.find(FieldClasses[i]->DeclaredFile)) {
+                GeneratedFileContextMap.insert(std::make_pair<>(FieldClasses[i]->DeclaredFile, FGeneratedFileContext()));
+                std::string DeclaredFile = FieldClasses[i]->DeclaredFile;
+                std::size_t Pos = DeclaredFile.find_last_of("/\\");
+                std::string DeclaredPath = DeclaredFile.substr(0, Pos);
+                std::string Filename = DeclaredFile.substr(Pos + 1);
+                std::size_t DotPos = Filename.rfind(".");
+                std::string FilenameNotDotH = Filename.substr(0, DotPos);
+                std::string GeneratedHeaderFile = std::filesystem::current_path().string() + "/" + FilenameNotDotH + ".reflect.h";
+                std::string GeneratedSourceFile = std::filesystem::current_path().string() + "/" + FilenameNotDotH + ".reflect.cpp";
+                GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedHeaderFile.open(GeneratedHeaderFile, std::ios::out | std::ios::trunc);
+                GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedSourceFile.open(GeneratedSourceFile, std::ios::out | std::ios::trunc);
+                if (!GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedHeaderFile.is_open()) {
+                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedHeaderFile);
+                    return false;
+                }
+                if (!GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedSourceFile.is_open()) {
+                    llvm::errs() << std::format("File<{:s}> open failed\n", GeneratedSourceFile);
+                    return false;
+                }
+                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedHeaderFile);
+                llvm::outs() << std::format("File<{:s}> generated\n", GeneratedSourceFile);
+                std::string HeaderFileBegin = "#pragma once\n";
+                std::string SourceFileBegin = "#include \"" + std::filesystem::path(DeclaredFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n";
+                SourceFileBegin += "#include \"" + std::filesystem::path(GeneratedHeaderFile).lexically_proximate(std::filesystem::current_path()).string() + "\"\n\n";
+                HeaderFileBegin += SourceFileBegin;
+                GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedHeaderFile.write(HeaderFileBegin.data(), HeaderFileBegin.size());
+                GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].GeneratedSourceFile.write(SourceFileBegin.data(), SourceFileBegin.size());
+            }
+            GeneratedFileContextMap[FieldClasses[i]->DeclaredFile].FieldClassList.push_back(FieldClasses[i].get());
+        }
+    }
+    for (auto GeneratedFileContextIterator = GeneratedFileContextMap.begin(); GeneratedFileContextIterator != GeneratedFileContextMap.end(); GeneratedFileContextIterator++)
+    {
+        std::vector<std::string> HeaderDependHeaderFile;
+        std::vector<std::string> SourceDependHeaderFile;
+        for (auto Iterator = GeneratedFileContextIterator->second.FieldClassList.begin(); Iterator != GeneratedFileContextIterator->second.FieldClassList.end(); Iterator++)
+        {
+            std::string GeneratedHeaderCode = ToGeneratedHeaderCode(*Iterator, HeaderDependHeaderFile);
+            std::string GeneratedSourceCode = ToGeneratedSourceCode(*Iterator, SourceDependHeaderFile);
+            GeneratedFileContextIterator->second.GeneratedHeaderFile.write(GeneratedHeaderCode.data(), GeneratedHeaderCode.size());
+            GeneratedFileContextIterator->second.GeneratedSourceFile.write(GeneratedSourceCode.data(), GeneratedSourceCode.size());
+        }
+        
+        GeneratedFileContextIterator->second.GeneratedHeaderFile.close();
+        GeneratedFileContextIterator->second.GeneratedSourceFile.close();
+    }
+    return true;
+}
+
+const char* S0Str  = "";
+const char* S4Str  = "    ";
+const char* S8Str  = "        ";
+const char* S12Str = "            ";
+const char* S16Str = "                ";
+
+std::string CCodeGenerator::ToGeneratedHeaderCode(CMeta* Meta, std::vector<std::string>& DependHeaderFile)
+{
+    std::string HeaderCode;
+    HeaderCode.reserve(4 * 1024);
+    CEnumClass* EnumClass = dyn_cast<CEnumClass>(Meta);
+    if(EnumClass){
+        const char* EnumTemplateDecl =
+            "{0:s}template<>\n"
+            "{0:s}struct TEnumClass<{1:s}>{{\n"
+            "{0:s}    static const CMeta * StaticMeta();\n"
+            "{0:s}    static Uint32 MetaId;\n"
+            "{0:s}}}; \n\n";
+        HeaderCode += std::format(EnumTemplateDecl, S0Str, EnumClass->Name);
+        return HeaderCode;
+    }
+    return HeaderCode;
+}
+
+const char* DeferredRegisterCode =
+"{0:s}CClassTable::Get().DeferredRegisterList.push_back([&] {{\n"
+"{0:s}    CMeta* Meta = CClassTable::Get().GetClass(\"{1:s}\");\n"
+"{0:s}    if(Meta != nullptr) {{\n"
+"{0:s}        CMetaProperty* MetaProperty = (CMetaProperty*)StructClass.Properties[1].get();\n"
+"{0:s}        MetaProperty->Meta = Meta;\n"
+"{0:s}        return true;\n"
+"{0:s}    }}\n"
+"{0:s}    assert(false && \"CLASS {1:s} NO EXIST\");\n"
+"{0:s}    return false;\n"
+"{0:s}}});\n";
+
+std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::string>& DependSourceFile)
+{
+    std::string SourceCode;
+    SourceCode.reserve(4 * 1024);
+    CEnumClass* EnumClass = dyn_cast<CEnumClass>(Meta);
+    if (EnumClass) {
+        const char* EnumTemplateDef[] = {
+        "{0:s}const CMeta* TEnumClass<{1:s}>::StaticMeta()\n"
+        "{0:s}{{\n"
+        "{0:s}    static std::function<CEnumClass* ()> ClassInitializer = []() -> CEnumClass* {{\n"
+        "{0:s}        static CEnumClass EnumClass(\"{1:s}\");\n"
+        "{0:s}        EnumClass.Size = sizeof({1:s});\n"
+        "{0:s}        EnumClass.Options = {{\n",
+        "{0:s}            {{\"{1:s}\", {2:d}}},\n",
+        "{0:s}        }};\n"
+        "{0:s}        return &EnumClass;\n"
+        "{0:s}    }};\n"
+        "{0:s}    static CEnumClass* EnumClassPtr = ClassInitializer();\n"
+        "{0:s}    return EnumClassPtr;\n"
+        "{0:s}}}\n\n"
+        "Uint32 TEnumClass<{1:s}>::MetaId = 0;\n\n"
+        "static TMetaAutoRegister<TEnumClass<{1:s}>> {1:s}MetaAutoRegister;\n\n"
+        };
+        SourceCode += std::format(EnumTemplateDef[0], S0Str, EnumClass->Name);
+        for (size_t i = 0; i < EnumClass->Options.size(); i++)
+        {
+            SourceCode += std::format(EnumTemplateDef[1], S0Str, EnumClass->Options[i].first, EnumClass->Options[i].second);
+        }
+        SourceCode += std::format(EnumTemplateDef[2], S0Str, EnumClass->Name);
+        return SourceCode;
+    }
+    CStructClass* StructClass = dyn_cast<CStructClass>(Meta);
+    if(StructClass)
+    {
+        const char* StructClassDef[] = {
+            "{0:s}const CMeta* {1:s}::StaticMeta()\n"
+            "{0:s}{{\n"
+            "{0:s}    static std::function<CStructClass* ()> ClassInitializer = []() -> CStructClass* {{\n"
+            "{0:s}        static CStructClass StructClass(\"{1:s}\");\n"
+            "{0:s}        StructClass.Size = sizeof({1:s});\n",
+            "{0:s}        StructClass.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",
+            "{0:s}        return &StructClass;\n"
+            "{0:s}    }};\n"
+            "{0:s}    static CStructClass* StructClassPtr = ClassInitializer();\n"
+            "{0:s}    return StructClassPtr;\n"
+            "{0:s}}}\n\n"
+            "Uint32 {1:s}::MetaId = 0;\n\n"
+            "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"
+        };
+
+        SourceCode += std::format(StructClassDef[0], S0Str, StructClass->Name);
+        for (size_t i = 0; i < StructClass->Properties.size(); i++)
+        {
+            CProperty* Property = StructClass->Properties[i].get();
+            switch (StructClass->Properties[i]->Flag & CPF_TypeMaskBitFlag)
+            {
+            case CPF_BoolFlag       :
+                SourceCode += std::format(StructClassDef[1], S0Str, "Bool", 
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}", 
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_Int8Flag       :
+	        case CPF_Int16Flag      :
+	        case CPF_Int32Flag      :
+	        case CPF_Int64Flag      :
+                SourceCode += std::format(StructClassDef[1], S0Str, std::format("Int{:d}", 8 * (StructClass->Properties[i]->Flag / CPF_Int8Flag)),
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_Uint8Flag      :
+	        case CPF_Uint16Flag     :
+	        case CPF_Uint32Flag     :
+	        case CPF_Uint64Flag     :
+                SourceCode += std::format(StructClassDef[1], S0Str, std::format("Uint{:d}", 8 * (StructClass->Properties[i]->Flag / CPF_Uint8Flag)),
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_FloatFlag  :
+                SourceCode += std::format(StructClassDef[1], S0Str, "Float",
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_DoubleFlag :
+                SourceCode += std::format(StructClassDef[1], S0Str, "Double",
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_StringFlag     :
+                SourceCode += std::format(StructClassDef[1], S0Str, "String",
+                    std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                break;
+	        case CPF_StructFlag     :
+            {
+                CStructProperty* StructProperty = (CStructProperty*)Property;
+                if (StructProperty->Meta->IsForwardDeclared)
+                {
+                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                    SourceCode += std::format(DeferredRegisterCode, S8Str, StructProperty->Meta->Name, i);
+                }
+                else
+                {
+                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", {4:s}::GetStructClass(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number, StructProperty->Meta->Name));
+                }
+                break;
+            }
+	        case CPF_ClassFlag      :
+            {
+                CClassProperty* ClassProperty = (CClassProperty*)Property;
+                if(ClassProperty->Meta->IsForwardDeclared)
+                {
+                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                    SourceCode += std::format(DeferredRegisterCode, S8Str, ClassProperty->Meta->Name, i);
+                }
+                else
+                {
+                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", {4:s}::GetClass(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number, ClassProperty->Meta->Name));
+                }
+            }
+                break;
+            default:
+                break;
+            }
+        }
+        SourceCode += std::format(StructClassDef[2], S0Str, StructClass->Name);
+    }
+    return SourceCode;
+}
+
+// 
 //std::string CCodeGenerator::ToGeneratedSourceCode(CClass* Class, std::vector<std::string>& DependHeaderFile)
 //{
 //    std::string SourceCode;
