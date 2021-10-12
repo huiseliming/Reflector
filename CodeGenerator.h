@@ -4,11 +4,11 @@
 class CCodeGenerator
 {
 public:
-    bool Generate();
-    std::string ToGeneratedHeaderCode(FClass* Descriptor, std::vector<std::string>& DependHeaderFile);
-    std::string ToGeneratedSourceCode(FClass* Descriptor, std::vector<std::string>& DependHeaderFile);
-    std::vector<std::unique_ptr<FClass>> GeneratedReflectClasses;
-    std::vector<std::unique_ptr<FClass>> OtherClasses;
+    bool Generate() { return false; }
+    std::string ToGeneratedHeaderCode(CField* Descriptor, std::vector<std::string>& DependHeaderFile);
+    std::string ToGeneratedSourceCode(CField* Descriptor, std::vector<std::string>& DependHeaderFile);
+    std::vector<std::unique_ptr<CField>> GeneratedReflectClasses;
+    std::vector<std::unique_ptr<CField>> OtherClasses;
     std::string BuildPath;
-    FClassTable ClassTable;
+    CClassTable ClassTable;
 };

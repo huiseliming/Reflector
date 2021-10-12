@@ -40,6 +40,24 @@ bool FindReflectAnnotation(const clang::Decl* CheckedDecl, const char* FoundMark
     return false;
 }
 
+bool FindReflectAnnotation(const clang::Decl* CheckedDecl, std::vector<const char*> FoundMarkStrs, std::vector<std::string>& ReflectAnnotation) {
+    for (auto AttrIterator = CheckedDecl->attr_begin(); AttrIterator < CheckedDecl->attr_end(); AttrIterator++) {
+        if ((*AttrIterator)->getKind() == clang::attr::Annotate)
+        {
+            AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(*AttrIterator);
+            SplitAnnotation(AnnotateAttrPtr->getAnnotation(), ReflectAnnotation);
+            SplitAnnotation(AnnotateAttrPtr->getAnnotation(), ReflectAnnotation);
+            for (size_t i = 0; i < FoundMarkStrs.size(); i++)
+            {
+                if (ReflectAnnotation.size() > 0 && ReflectAnnotation[0] == FoundMarkStrs[i]) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 //std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const Decl* D)
 //{
 //    SourceRange Loc = D->getSourceRange();

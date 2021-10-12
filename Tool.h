@@ -6,6 +6,8 @@ void SplitAnnotation(llvm::StringRef AnnotationString, std::vector<std::string>&
 
 bool FindReflectAnnotation(const clang::Decl* CheckedDecl, const char* FoundMarkStr, std::vector<std::string>& ReflectAnnotation);
 
+bool FindReflectAnnotation(const clang::Decl* CheckedDecl, std::vector<const char*> FoundMarkStrs, std::vector<std::string>& ReflectAnnotation);
+
 //std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const clang::Decl* D);
 
 bool IsMatchedCppHeaderAndSource(const char* HeaderFile, uint32_t HeaderFileLength, const char* SourceFile, uint32_t SourceFileLength);
