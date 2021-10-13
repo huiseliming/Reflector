@@ -9,19 +9,42 @@ using namespace clang;
 
 void SplitAnnotation(StringRef AnnotationString, std::vector<std::string>& Annotations)
 {
+    uint32_t BracketCounter = 0;
     Annotations.clear();
     size_t PreviousPos = 0;
     for (size_t i = 0; i < AnnotationString.size(); i++)
     {
-        if (AnnotationString[i] == ',') {
+        if (BracketCounter == 0 && AnnotationString[i] == ',') {
             std::string Str(AnnotationString.data() + PreviousPos, i - PreviousPos);
-            Str.erase(std::remove_if(Str.begin(), Str.end(), isspace), Str.end());
+            char MatchCharacter = '\0';
+            Str.erase(std::remove_if(Str.begin(), Str.end(), [&] (char& C) {
+                    if (MatchCharacter == '\0' && (C == '\'' || C == '\"')) MatchCharacter = C;
+                    else if (MatchCharacter == C)  MatchCharacter = '\0';
+                    else if (std::isspace(C) && MatchCharacter == '\0') return true;
+                    return false;
+                }
+            ), Str.end());
             Annotations.emplace_back(Str);
             PreviousPos = i + 1;
         }
+        if (AnnotationString[i] == '(')
+        {
+            BracketCounter++;
+        }
+        if (AnnotationString[i] == ')')
+        {
+            BracketCounter--;
+        }
     }
     std::string Str(AnnotationString.data() + PreviousPos, AnnotationString.size() - PreviousPos);
-    Str.erase(std::remove_if(Str.begin(), Str.end(), isspace), Str.end());
+    char MatchCharacter = '\0';
+    Str.erase(std::remove_if(Str.begin(), Str.end(), [&](char& C) {
+        if (MatchCharacter == '\0' && (C == '\'' || C == '\"')) MatchCharacter = C;
+        else if (MatchCharacter == C)  MatchCharacter = '\0';
+        else if (std::isspace(C) && MatchCharacter == '\0') return true;
+        return false;
+        }
+    ), Str.end());
     Annotations.emplace_back(Str);
 
 }
@@ -46,7 +69,6 @@ bool FindReflectAnnotation(const clang::Decl* CheckedDecl, std::vector<const cha
         {
             AnnotateAttr* AnnotateAttrPtr = dyn_cast<AnnotateAttr>(*AttrIterator);
             SplitAnnotation(AnnotateAttrPtr->getAnnotation(), ReflectAnnotation);
-            SplitAnnotation(AnnotateAttrPtr->getAnnotation(), ReflectAnnotation);
             for (size_t i = 0; i < FoundMarkStrs.size(); i++)
             {
                 if (ReflectAnnotation.size() > 0 && ReflectAnnotation[0] == FoundMarkStrs[i]) {
@@ -57,6 +79,36 @@ bool FindReflectAnnotation(const clang::Decl* CheckedDecl, std::vector<const cha
     }
     return false;
 }
+
+
+void ParsingMetaString(CMeta* Meta, std::vector<std::string>& ReflectAnnotation)
+{
+    for (size_t i = 0; i < ReflectAnnotation.size(); i++)
+    {
+        if (std::strncmp(ReflectAnnotation[i].c_str(), "Meta=(", sizeof("Meta=(") - 1) == 0 && ')' == ReflectAnnotation[i].back())
+        {
+            std::string MetaString = ReflectAnnotation[i].substr(6, ReflectAnnotation[i].size() - 6 - 1);
+            size_t PreviousPos = 0;
+            for (size_t j = 0; j < MetaString.size(); j++)
+            {
+                if (MetaString[j] == ',') {
+                    std::string Str(MetaString.data() + PreviousPos, j - PreviousPos);
+                    size_t Pos = Str.find_last_of('=');
+                    std::string Key = Str.substr(0, Pos);
+                    std::string Value = Str.substr(Pos + 1);
+                    Meta->Data.insert_or_assign(Key, Value);
+                    PreviousPos = j + 1;
+                }
+            }
+            std::string Str(MetaString.data() + PreviousPos, MetaString.size() - PreviousPos);
+            size_t Pos = Str.find_last_of('=');
+            std::string Key = Str.substr(0, Pos);
+            std::string Value = Str.substr(Pos + 1);
+            Meta->Data.insert_or_assign(Key, Value);
+        }
+    }
+}
+
 
 //std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const Decl* D)
 //{

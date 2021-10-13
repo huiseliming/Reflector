@@ -6,6 +6,33 @@
 using namespace llvm;
 using namespace clang;
 
+std::string ParsingDoubleQuotes(std::string str) {
+    size_t Start = 0;
+    size_t End = str.size();
+    if (((str[0] == '\"' && str[str.size() - 1] == '\"')||
+        (str[0] == '\'' && str[str.size() - 1] == '\'')) && str.size() > 2)
+    {
+        Start = 1;
+        End = str.size() - 1;
+    }
+    
+    std::string ret;
+    ret.reserve((End - Start) * 2);
+    for (size_t i = Start; i < End; i++)
+    {
+        if (str[i] == '\"' && (str[i - 1] != '\\' || i == 0 )) {
+
+            ret.push_back('\\');
+            ret.push_back(str[i]);
+        }
+        else
+        {
+            ret.push_back(str[i]);
+        }
+    }
+    return ret;
+}
+
 bool CCodeGenerator::Generate()
 {
     struct FGeneratedFileContext {
@@ -117,8 +144,11 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
         "{0:s}    static std::function<CEnumClass* ()> ClassInitializer = []() -> CEnumClass* {{\n"
         "{0:s}        static CEnumClass EnumClass(\"{1:s}\");\n"
         "{0:s}        EnumClass.Size = sizeof({1:s});\n"
-        "{0:s}        EnumClass.Options = {{\n",
-        "{0:s}            {{\"{1:s}\", {2:d}}},\n",
+        "{0:s}        EnumClass.Options = {{\n",//0
+        "{0:s}            {{\"{1:s}\", {2:d}}},\n",//1
+        "{0:s}        }};\n"
+        "{0:s}        EnumClass->Data = {{\n",//2
+        "{0:s}            {{\"{1:s}\", \"{2:s}\"}},\n",//3
         "{0:s}        }};\n"
         "{0:s}        return &EnumClass;\n"
         "{0:s}    }};\n"
@@ -126,14 +156,19 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
         "{0:s}    return EnumClassPtr;\n"
         "{0:s}}}\n\n"
         "Uint32 TEnumClass<{1:s}>::MetaId = 0;\n\n"
-        "static TMetaAutoRegister<TEnumClass<{1:s}>> {1:s}MetaAutoRegister;\n\n"
+        "static TMetaAutoRegister<TEnumClass<{1:s}>> {1:s}MetaAutoRegister;\n\n"//4
         };
         SourceCode += std::format(EnumTemplateDef[0], S0Str, EnumClass->Name);
         for (size_t i = 0; i < EnumClass->Options.size(); i++)
         {
             SourceCode += std::format(EnumTemplateDef[1], S0Str, EnumClass->Options[i].first, EnumClass->Options[i].second);
         }
-        SourceCode += std::format(EnumTemplateDef[2], S0Str, EnumClass->Name);
+        SourceCode += std::format(EnumTemplateDef[2], S0Str);
+        for (auto Iterator = EnumClass->Data.begin(); Iterator != EnumClass->Data.end(); Iterator++)
+        {
+            SourceCode += std::format(EnumTemplateDef[3], S0Str, Iterator->first, ParsingDoubleQuotes(Iterator->second));
+        }
+        SourceCode += std::format(EnumTemplateDef[4], S0Str, EnumClass->Name);
         return SourceCode;
     }
 
@@ -149,25 +184,37 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
             "{0:s}        Struct.Delete      = TLifeCycle<{1:s}>::Delete;\n"
             "{0:s}        Struct.Constructor = TLifeCycle<{1:s}>::Constructor;\n"
             "{0:s}        Struct.Destructor  = TLifeCycle<{1:s}>::Destructor;\n"
-            "{0:s}        Struct.Size = sizeof({1:s});\n",
-            "{0:s}        Struct.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",
+            "{0:s}        Struct.Size = sizeof({1:s});\n"
+            "{0:s}        Struct->Data = {{\n",//0
+            "{0:s}            {{\"{1:s}\", \"{2:s}\"}},\n",//1
+            "{0:s}        }};\n",//2
+            "{0:s}        Struct.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",//3
+            "{0:s}        Struct.Properties.back()->Data = {{\n",//4
+            "{0:s}            {{ \"{1:s}\", \"{2:s}\" }},\n",//5
+            "{0:s}        }};\n",//6
             "{0:s}        return &Struct;\n"
             "{0:s}    }};\n"
             "{0:s}    static CStruct* StructPtr = ClassInitializer();\n"
             "{0:s}    return StructPtr;\n"
             "{0:s}}}\n\n"
             "Uint32 {1:s}::MetaId = 0;\n\n"
-            "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"
+            "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"//7
         };
 
         SourceCode += std::format(StructDef[0], S0Str, Struct->Name);
+        for (auto Iterator = Struct->Data.begin(); Iterator != Struct->Data.end(); Iterator++)
+        {
+            std::string srt = ParsingDoubleQuotes(Iterator->second);
+            SourceCode += std::format(StructDef[1], S0Str, Iterator->first, srt);
+        }
+        SourceCode += std::format(StructDef[2], S0Str);
         for (size_t i = 0; i < Struct->Properties.size(); i++)
         {
             CProperty* Property = Struct->Properties[i].get();
             switch (Struct->Properties[i]->Flag & CPF_TypeMaskBitFlag)
             {
             case CPF_BoolFlag       :
-                SourceCode += std::format(StructDef[1], S0Str, "Bool", 
+                SourceCode += std::format(StructDef[3], S0Str, "Bool", 
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}", 
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
@@ -175,7 +222,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 	        case CPF_Int16Flag      :
 	        case CPF_Int32Flag      :
 	        case CPF_Int64Flag      :
-                SourceCode += std::format(StructDef[1], S0Str, std::format("Int{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Int8Flag)),
+                SourceCode += std::format(StructDef[3], S0Str, std::format("Int{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Int8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
@@ -183,22 +230,22 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 	        case CPF_Uint16Flag     :
 	        case CPF_Uint32Flag     :
 	        case CPF_Uint64Flag     :
-                SourceCode += std::format(StructDef[1], S0Str, std::format("Uint{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Uint8Flag)),
+                SourceCode += std::format(StructDef[3], S0Str, std::format("Uint{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Uint8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_FloatFlag  :
-                SourceCode += std::format(StructDef[1], S0Str, "Float",
+                SourceCode += std::format(StructDef[3], S0Str, "Float",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_DoubleFlag :
-                SourceCode += std::format(StructDef[1], S0Str, "Double",
+                SourceCode += std::format(StructDef[3], S0Str, "Double",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_StringFlag     :
-                SourceCode += std::format(StructDef[1], S0Str, "String",
+                SourceCode += std::format(StructDef[3], S0Str, "String",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
@@ -207,14 +254,14 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
                 CStructProperty* StructProperty = (CStructProperty*)Property;
                 if (StructProperty->Meta->IsForwardDeclared)
                 {
-                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[3], S0Str, "Class",
                         std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                             Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                     SourceCode += std::format(DeferredRegisterCode, S8Str, StructProperty->Meta->Name, i);
                 }
                 else
                 {
-                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[3], S0Str, "Class",
                         std::format("\"{0:s}\", {4:s}::GetStruct(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                             Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number, StructProperty->Meta->Name));
                 }
@@ -225,14 +272,14 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
                 CClassProperty* ClassProperty = (CClassProperty*)Property;
                 if(ClassProperty->Meta->IsForwardDeclared)
                 {
-                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[3], S0Str, "Class",
                         std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                             Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                     SourceCode += std::format(DeferredRegisterCode, S8Str, ClassProperty->Meta->Name, i);
                 }
                 else
                 {
-                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[3], S0Str, "Class",
                         std::format("\"{0:s}\", {4:s}::GetMeta(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                             Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number, ClassProperty->Meta->Name));
                 }
@@ -241,172 +288,14 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
             default:
                 break;
             }
+            SourceCode += std::format(StructDef[4], S0Str);
+            for (auto Iterator = Struct->Properties[i]->Data.begin(); Iterator != Struct->Properties[i]->Data.end(); Iterator++)
+            {
+                SourceCode += std::format(StructDef[5], S0Str, Iterator->first, ParsingDoubleQuotes(Iterator->second));
+            }
+            SourceCode += std::format(StructDef[6], S0Str);
         }
-        SourceCode += std::format(StructDef[2], S0Str, Struct->Name);
+        SourceCode += std::format(StructDef[7], S0Str, Struct->Name);
     }
     return SourceCode;
 }
-
-// 
-//std::string CCodeGenerator::ToGeneratedSourceCode(CClass* Class, std::vector<std::string>& DependHeaderFile)
-//{
-//    std::string SourceCode;
-//    SourceCode.reserve(4*1024);
-//    if (Class->IsEnumClass()) {
-//        FEnumClass* EnumClass = (FEnumClass*)Class;
-//        SourceCode += std::format(
-//        "const CClass* TEnum<{0:s}>::GetMeta()\n"
-//        "{{\n"
-//        "    static std::function<CClass* ()> ClassInitializer = []() -> CClass* {{\n"
-//        "        static struct {0:s}Class : public FEnumClass {{\n", EnumClass->Name);
-//        if (Class->HasDefaultConstructor()) {
-//            SourceCode += std::format(
-//        "            void* New()                    override {{ return new {0:s}(); }}\n"
-//            , EnumClass->Name);
-//        }
-//        if (Class->HasDefaultConstructor()) {
-//            SourceCode += std::format(
-//        "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
-//            , EnumClass->Name);
-//        }
-//        SourceCode += std::format(
-//        "            const char* ToString(Uint64 In) override\n"
-//        "            {{\n"
-//        "                switch (In)\n"
-//        "                {{\n",
-//            EnumClass->Name);
-//        for (size_t i = 0; i < EnumClass->Options.size(); i++)
-//        {
-//            SourceCode += std::format(
-//        "                case {0:d}:\n"
-//        "                    return \"{1:s}\";\n",
-//                EnumClass->Options[i].second,
-//                EnumClass->Options[i].first);
-//        }
-//        SourceCode += std::format(
-//        "                default:\n"
-//        "                    return \"?*?*?\";\n"
-//        "                }}\n"
-//        "            }}\n\n");
-//        SourceCode += std::format(
-//        "        }} Class{{}};\n"
-//        "        Class.Name = \"{0:s}\";\n"
-//        "        Class.Size = sizeof({0:s});\n"
-//        "        Class.Flag = {1:#010x};\n",
-//            Class->Name,
-//            Class->Flag);
-//    }else{
-//        SourceCode += std::format(
-//        "const CClass* {0:s}::GetMeta()\n"
-//        "{{\n"
-//        "    static std::function<CClass* ()> ClassInitializer = []() -> CClass* {{\n"
-//        "        static struct {0:s}Class : public CClass {{\n",
-//            Class->Name
-//        );
-//        if(Class->HasDefaultConstructor()){
-//            SourceCode += std::format(
-//        "            void* New()                    override {{ return new {0:s}(); }}\n"
-//        "            void Constructor(void* Object) override {{ new (Object) {0:s}(); }}\n", Class->Name);
-//        }
-//        if (Class->HasDefaultConstructor()) {
-//            SourceCode += std::format(
-//        "            void Delete(void* Object)      override {{ delete ({0:s}*)Object; }}\n"
-//        "            void Destructor(void* Object)  override {{ reinterpret_cast<{0:s}*>(Object)->~{0:s}(); }}\n", Class->Name);
-//        }
-//        SourceCode += std::format(
-//        "        }} Class{{}};\n"
-//        "        Class.Name = \"{0:s}\";\n"
-//        "        Class.Size = sizeof({0:s});\n"
-//        "        Class.Flag = {1:#010x};\n",
-//            Class->Name,
-//            Class->Flag
-//        );
-//    }
-//    SourceCode += std::format(
-//        "        Class.Properties.resize({:d});\n", Class->Properties.size());
-//    for (size_t i = 0; i < Class->Properties.size(); i++)
-//    {
-//        CClass* FieldsClass = const_cast<CClass*>(Class->Properties[i].Class);
-//        if(FieldsClass->IsForwardDeclaredClass()){
-//            SourceCode += std::format(
-//        "        FMetaTable::Get().DeferredRegisterList.push_back([&] {{\n"
-//        "            CClass* FieldClass = FMetaTable::Get().GetMeta(\"{1:s}\");\n"
-//        "            if(FieldClass != nullptr) {{\n"
-//        "                Class.Properties[{0:d}].Class = FieldClass;\n"
-//        "                return true;\n"
-//        "            }}\n"
-//        "            assert(false && \"CLASS {1:s} NO EXIST\");\n"
-//        "            return false;\n"
-//        "        }});\n", 
-//        i, 
-//        Class->Properties[i].Class->Name);
-//        }
-//        else
-//        {
-//            SourceCode += std::format(
-//        "        Class.Properties[{0:d}].Class = {1:s}::GetMeta();\n", i, Class->Properties[i].Class->Name);
-//        }
-//        SourceCode += std::format(
-//        "        Class.Properties[{0:d}].Name = \"{2:s}\";\n"
-//        "        Class.Properties[{0:d}].Flag = {3:#010x};\n"
-//        "        Class.Properties[{0:d}].Offset = offsetof({5:s},{2:s});\n"
-//        "        Class.Properties[{0:d}].Number = {4:d};\n",
-//        i,
-//        Class->Properties[i].Class->Name,
-//        Class->Properties[i].Name,
-//        Class->Properties[i].Flag,
-//        Class->Properties[i].Number,
-//        Class->Name);
-//    }
-//    if (Class->Alias.size() > 0) {
-//        SourceCode += std::format(
-//        "        Class.Alias.resize({:d});\n", Class->Alias.size());
-//        for (size_t i = 0; i < Class->Alias.size(); i++)
-//        {
-//            SourceCode += std::format(
-//        "        Class.Alias[{0:d}] = {1:s};\n", i, Class->Alias[i]);
-//        }
-//
-//    }
-//
-//    if (Class->ParentClasses.size() > 0) {
-//        SourceCode += std::format(
-//        "        Class.ParentClasses.resize({:d});\n", Class->ParentClasses.size());
-//        for (size_t i = 0; i < Class->ParentClasses.size(); i++)
-//        {
-//            if (const_cast<CClass*>(Class->ParentClasses[i])->IsReflectClass())
-//            {
-//                SourceCode += std::format(
-//        "        Class.ParentClasses[{0:d}] = {1:s}::GetMeta();\n", i, Class->ParentClasses[i]->Name);
-//            }
-//        }
-//    }
-//
-//    SourceCode += std::format(
-//        "        return &Class;\n"
-//        "    }};\n"
-//        "    static CClass* {0:s}Class = ClassInitializer();\n"
-//        "    return {0:s}Class;\n"
-//        "}}\n\n",
-//        Class->Name);
-//
-//    // ClassId init must before ClassAutoRegister
-//    if (!Class->IsEnumClass()) {
-//    SourceCode += std::format(
-//        "Uint32 {0:s}::ClassId = 0;\n\n",
-//        Class->Name);
-//    SourceCode += std::format(
-//        "static TClassAutoRegister<{0:s}> {0:s}ClassAutoRegister;\n\n",
-//        Class->Name);
-//    }else{
-//    SourceCode += std::format(
-//        "Uint32 TEnum<{0:s}>::ClassId = 0;\n\n",
-//        Class->Name);
-//    SourceCode += std::format(
-//        "static TClassAutoRegister<TEnum<{0:s}>> {0:s}ClassAutoRegister;\n\n",
-//        Class->Name);
-//    }
-//    return SourceCode;
-//}
-//
-//

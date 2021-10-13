@@ -123,7 +123,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         }
     }
     Meta->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
-
+    ParsingMetaString(Meta, ReflectAnnotation);
     CStruct* Struct = dyn_cast<CStruct>(Meta);
     if (Struct) {
         // parend class parse
@@ -298,6 +298,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                 llvm::errs() << std::format("<{:s}:{:d}> <{:s}> unsupported type <???>\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
                 return nullptr;
             }
+            ParsingMetaString(Struct->Properties.back().get(), ReflectAnnotation);
         }
         // Function parse
         CClass* Class = dyn_cast<CClass>(Struct);
@@ -343,6 +344,7 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
         }
     }
     Meta->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
+    ParsingMetaString(Meta, ReflectAnnotation);
     CEnumClass* EnumClass = dyn_cast<CEnumClass>(Meta);
     if (EnumClass) {
         TypeInfo EnumTypeInfo = Context->getTypeInfo(InEnumDecl->getTypeForDecl());

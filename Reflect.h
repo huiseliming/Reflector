@@ -109,9 +109,6 @@ enum EPropertyFlag : Uint32
 	CPF_ReferenceFlag        = 0x20000000,
 	CPF_ConstValueFlag       = 0x40000000,
 	CPF_ConstPointerceFlag   = 0x80000000,
-								 
-
-
 
 	CPF_IntegerMaskBitFlag = CPF_Int8Flag | CPF_Int16Flag | CPF_Int32Flag | CPF_Int64Flag | CPF_Uint8Flag | CPF_Uint16Flag | CPF_Uint32Flag | CPF_Uint64Flag,
 	CPF_FloatingPointMaskBitFlag = CPF_FloatFlag | CPF_DoubleFlag,
@@ -172,7 +169,7 @@ public:
 	std::vector<STRING_TYPE> Alias;
 
 	Uint32 Id{ 0 };
-	std::unordered_map<std::string, const char*> Data;
+	std::unordered_map<std::string, STRING_TYPE> Data;
 
 #ifdef COMPILE_REFLECTOR
 	std::string DeclaredFile;
