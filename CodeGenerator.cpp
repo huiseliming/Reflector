@@ -136,6 +136,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
         SourceCode += std::format(EnumTemplateDef[2], S0Str, EnumClass->Name);
         return SourceCode;
     }
+
     CStruct* Struct = dyn_cast<CStruct>(Meta);
     if(Struct)
     {
@@ -144,6 +145,10 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
             "{0:s}{{\n"
             "{0:s}    static std::function<CStruct* ()> ClassInitializer = []() -> CStruct* {{\n"
             "{0:s}        static CStruct Struct(\"{1:s}\");\n"
+            "{0:s}        Struct.New         = TLifeCycle<{1:s}>::New;\n"
+            "{0:s}        Struct.Delete      = TLifeCycle<{1:s}>::Delete;\n"
+            "{0:s}        Struct.Constructor = TLifeCycle<{1:s}>::Constructor;\n"
+            "{0:s}        Struct.Destructor  = TLifeCycle<{1:s}>::Destructor;\n"
             "{0:s}        Struct.Size = sizeof({1:s});\n",
             "{0:s}        Struct.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",
             "{0:s}        return &Struct;\n"

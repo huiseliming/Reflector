@@ -113,7 +113,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         else {
             SourceRange Loc = InCXXRecordDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), InCXXRecordDecl->getQualifiedNameAsString());
+            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>\n", PLoc.getFilename(), PLoc.getLine(), InCXXRecordDecl->getQualifiedNameAsString());
             return nullptr;
         }
         Meta = CodeGenerator.GeneratedReflectMetas.back().get();
@@ -246,28 +246,35 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                 }
                 else
                 {
-                    std::string ForwardDeclaredStructName = FieldUnqualifiedType->getAsCXXRecordDecl()->getNameAsString().c_str();
-                    if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (PropertyFlag & (CPF_PointerFlag | CPF_ReferenceFlag)))
-                    {
-                        CStruct* ForwardDeclaredStruct = (CStruct*)CodeGenerator.MetaTable.GetMeta(ForwardDeclaredStructName.c_str());
-                        if (!ForwardDeclaredStruct) {
-                            if (FieldUnqualifiedType->isStructureType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CStruct>(ForwardDeclaredStructName.c_str()));
-                            else if (FieldUnqualifiedType->isClassType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CClass>(ForwardDeclaredStructName.c_str()));
-                            else assert(!"???");
-                            ForwardDeclaredStruct = (CStruct*)CodeGenerator.OtherMetas.back().get();
-                            ForwardDeclaredStruct->IsForwardDeclared = true;
-                            CodeGenerator.MetaTable.RegisterMetaToTable(ForwardDeclaredStruct);
-                        }
-                        CClass* ForwardDeclaredClass = dyn_cast<CClass>(ForwardDeclaredStruct);
-                        if (ForwardDeclaredClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, 0, PropertyFlag, PropertyNumber));
-                        else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStruct, 0, PropertyFlag, PropertyNumber));
+                    if (FieldUnqualifiedType.getAsString() == "std::string") {
+                        Struct->Properties.push_back(std::make_unique<CStringProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
                     }
                     else
                     {
-                        SourceRange Loc = Field->getSourceRange();
-                        PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-                        llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is class\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
-                        return nullptr;
+                        std::string ForwardDeclaredStructName = FieldUnqualifiedType->getAsCXXRecordDecl()->getNameAsString().c_str();
+                        if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (PropertyFlag & (CPF_PointerFlag | CPF_ReferenceFlag)))
+                        {
+                            CStruct* ForwardDeclaredStruct = (CStruct*)CodeGenerator.MetaTable.GetMeta(ForwardDeclaredStructName.c_str());
+                            if (!ForwardDeclaredStruct) {
+                                if (FieldUnqualifiedType->isStructureType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CStruct>(ForwardDeclaredStructName.c_str()));
+                                else if (FieldUnqualifiedType->isClassType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CClass>(ForwardDeclaredStructName.c_str()));
+                                else assert(!"???");
+                                ForwardDeclaredStruct = (CStruct*)CodeGenerator.OtherMetas.back().get();
+                                ForwardDeclaredStruct->IsForwardDeclared = true;
+                                CodeGenerator.MetaTable.RegisterMetaToTable(ForwardDeclaredStruct);
+                            }
+                            CClass* ForwardDeclaredClass = dyn_cast<CClass>(ForwardDeclaredStruct);
+                            if (ForwardDeclaredClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, 0, PropertyFlag, PropertyNumber));
+                            else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStruct, 0, PropertyFlag, PropertyNumber));
+                        }
+                        else
+                        {
+
+                            SourceRange Loc = Field->getSourceRange();
+                            PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                            llvm::errs() << std::format("<{:s}:{:d}> property<{:s}> not is class\n", PLoc.getFilename(), PLoc.getLine(), Field->getType().getAsString());
+                            return nullptr;
+                        }
                     }
                 }
             }
