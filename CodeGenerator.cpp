@@ -13,7 +13,7 @@ bool CCodeGenerator::Generate()
         std::fstream GeneratedSourceFile;
         std::fstream GeneratedHeaderFile;
     };
-    std::vector<std::unique_ptr<CMeta>>& FieldClasses = GeneratedReflectClasses;
+    std::vector<std::unique_ptr<CMeta>>& FieldClasses = GeneratedReflectMetas;
     std::unordered_map<std::string, FGeneratedFileContext> GeneratedFileContextMap;
     for (size_t i = 0; i < FieldClasses.size(); i++)
     {
@@ -94,10 +94,10 @@ std::string CCodeGenerator::ToGeneratedHeaderCode(CMeta* Meta, std::vector<std::
 }
 
 const char* DeferredRegisterCode =
-"{0:s}CClassTable::Get().DeferredRegisterList.push_back([&] {{\n"
-"{0:s}    CMeta* Meta = CClassTable::Get().GetClass(\"{1:s}\");\n"
+"{0:s}CMetaTable::Get().DeferredRegisterList.push_back([&] {{\n"
+"{0:s}    CMeta* Meta = CMetaTable::Get().GetMeta(\"{1:s}\");\n"
 "{0:s}    if(Meta != nullptr) {{\n"
-"{0:s}        CMetaProperty* MetaProperty = (CMetaProperty*)StructClass.Properties[1].get();\n"
+"{0:s}        CMetaProperty* MetaProperty = (CMetaProperty*)Struct.Properties[1].get();\n"
 "{0:s}        MetaProperty->Meta = Meta;\n"
 "{0:s}        return true;\n"
 "{0:s}    }}\n"
@@ -136,82 +136,82 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
         SourceCode += std::format(EnumTemplateDef[2], S0Str, EnumClass->Name);
         return SourceCode;
     }
-    CStructClass* StructClass = dyn_cast<CStructClass>(Meta);
-    if(StructClass)
+    CStruct* Struct = dyn_cast<CStruct>(Meta);
+    if(Struct)
     {
-        const char* StructClassDef[] = {
+        const char* StructDef[] = {
             "{0:s}const CMeta* {1:s}::StaticMeta()\n"
             "{0:s}{{\n"
-            "{0:s}    static std::function<CStructClass* ()> ClassInitializer = []() -> CStructClass* {{\n"
-            "{0:s}        static CStructClass StructClass(\"{1:s}\");\n"
-            "{0:s}        StructClass.Size = sizeof({1:s});\n",
-            "{0:s}        StructClass.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",
-            "{0:s}        return &StructClass;\n"
+            "{0:s}    static std::function<CStruct* ()> ClassInitializer = []() -> CStruct* {{\n"
+            "{0:s}        static CStruct Struct(\"{1:s}\");\n"
+            "{0:s}        Struct.Size = sizeof({1:s});\n",
+            "{0:s}        Struct.Properties.push_back(std::make_unique<C{1:s}Property>({2:s}));\n",
+            "{0:s}        return &Struct;\n"
             "{0:s}    }};\n"
-            "{0:s}    static CStructClass* StructClassPtr = ClassInitializer();\n"
-            "{0:s}    return StructClassPtr;\n"
+            "{0:s}    static CStruct* StructPtr = ClassInitializer();\n"
+            "{0:s}    return StructPtr;\n"
             "{0:s}}}\n\n"
             "Uint32 {1:s}::MetaId = 0;\n\n"
             "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"
         };
 
-        SourceCode += std::format(StructClassDef[0], S0Str, StructClass->Name);
-        for (size_t i = 0; i < StructClass->Properties.size(); i++)
+        SourceCode += std::format(StructDef[0], S0Str, Struct->Name);
+        for (size_t i = 0; i < Struct->Properties.size(); i++)
         {
-            CProperty* Property = StructClass->Properties[i].get();
-            switch (StructClass->Properties[i]->Flag & CPF_TypeMaskBitFlag)
+            CProperty* Property = Struct->Properties[i].get();
+            switch (Struct->Properties[i]->Flag & CPF_TypeMaskBitFlag)
             {
             case CPF_BoolFlag       :
-                SourceCode += std::format(StructClassDef[1], S0Str, "Bool", 
+                SourceCode += std::format(StructDef[1], S0Str, "Bool", 
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}", 
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_Int8Flag       :
 	        case CPF_Int16Flag      :
 	        case CPF_Int32Flag      :
 	        case CPF_Int64Flag      :
-                SourceCode += std::format(StructClassDef[1], S0Str, std::format("Int{:d}", 8 * (StructClass->Properties[i]->Flag / CPF_Int8Flag)),
+                SourceCode += std::format(StructDef[1], S0Str, std::format("Int{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Int8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_Uint8Flag      :
 	        case CPF_Uint16Flag     :
 	        case CPF_Uint32Flag     :
 	        case CPF_Uint64Flag     :
-                SourceCode += std::format(StructClassDef[1], S0Str, std::format("Uint{:d}", 8 * (StructClass->Properties[i]->Flag / CPF_Uint8Flag)),
+                SourceCode += std::format(StructDef[1], S0Str, std::format("Uint{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Uint8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_FloatFlag  :
-                SourceCode += std::format(StructClassDef[1], S0Str, "Float",
+                SourceCode += std::format(StructDef[1], S0Str, "Float",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_DoubleFlag :
-                SourceCode += std::format(StructClassDef[1], S0Str, "Double",
+                SourceCode += std::format(StructDef[1], S0Str, "Double",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_StringFlag     :
-                SourceCode += std::format(StructClassDef[1], S0Str, "String",
+                SourceCode += std::format(StructDef[1], S0Str, "String",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                        Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                        Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
 	        case CPF_StructFlag     :
             {
                 CStructProperty* StructProperty = (CStructProperty*)Property;
                 if (StructProperty->Meta->IsForwardDeclared)
                 {
-                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[1], S0Str, "Class",
                         std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                            Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                     SourceCode += std::format(DeferredRegisterCode, S8Str, StructProperty->Meta->Name, i);
                 }
                 else
                 {
-                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
-                        std::format("\"{0:s}\", {4:s}::GetStructClass(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number, StructProperty->Meta->Name));
+                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", {4:s}::GetStruct(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number, StructProperty->Meta->Name));
                 }
                 break;
             }
@@ -220,16 +220,16 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
                 CClassProperty* ClassProperty = (CClassProperty*)Property;
                 if(ClassProperty->Meta->IsForwardDeclared)
                 {
-                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
+                    SourceCode += std::format(StructDef[1], S0Str, "Class",
                         std::format("\"{0:s}\", nullptr, offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number));
+                            Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                     SourceCode += std::format(DeferredRegisterCode, S8Str, ClassProperty->Meta->Name, i);
                 }
                 else
                 {
-                    SourceCode += std::format(StructClassDef[1], S0Str, "Class",
-                        std::format("\"{0:s}\", {4:s}::GetClass(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
-                            Property->Name, StructClass->Name, (Uint32)Property->Flag, Property->Number, ClassProperty->Meta->Name));
+                    SourceCode += std::format(StructDef[1], S0Str, "Class",
+                        std::format("\"{0:s}\", {4:s}::GetMeta(), offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
+                            Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number, ClassProperty->Meta->Name));
                 }
             }
                 break;
@@ -237,7 +237,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
                 break;
             }
         }
-        SourceCode += std::format(StructClassDef[2], S0Str, StructClass->Name);
+        SourceCode += std::format(StructDef[2], S0Str, Struct->Name);
     }
     return SourceCode;
 }
@@ -250,7 +250,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 //    if (Class->IsEnumClass()) {
 //        FEnumClass* EnumClass = (FEnumClass*)Class;
 //        SourceCode += std::format(
-//        "const CClass* TEnum<{0:s}>::GetClass()\n"
+//        "const CClass* TEnum<{0:s}>::GetMeta()\n"
 //        "{{\n"
 //        "    static std::function<CClass* ()> ClassInitializer = []() -> CClass* {{\n"
 //        "        static struct {0:s}Class : public FEnumClass {{\n", EnumClass->Name);
@@ -292,7 +292,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 //            Class->Flag);
 //    }else{
 //        SourceCode += std::format(
-//        "const CClass* {0:s}::GetClass()\n"
+//        "const CClass* {0:s}::GetMeta()\n"
 //        "{{\n"
 //        "    static std::function<CClass* ()> ClassInitializer = []() -> CClass* {{\n"
 //        "        static struct {0:s}Class : public CClass {{\n",
@@ -324,8 +324,8 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 //        CClass* FieldsClass = const_cast<CClass*>(Class->Properties[i].Class);
 //        if(FieldsClass->IsForwardDeclaredClass()){
 //            SourceCode += std::format(
-//        "        FClassTable::Get().DeferredRegisterList.push_back([&] {{\n"
-//        "            CClass* FieldClass = FClassTable::Get().GetClass(\"{1:s}\");\n"
+//        "        FMetaTable::Get().DeferredRegisterList.push_back([&] {{\n"
+//        "            CClass* FieldClass = FMetaTable::Get().GetMeta(\"{1:s}\");\n"
 //        "            if(FieldClass != nullptr) {{\n"
 //        "                Class.Properties[{0:d}].Class = FieldClass;\n"
 //        "                return true;\n"
@@ -339,7 +339,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 //        else
 //        {
 //            SourceCode += std::format(
-//        "        Class.Properties[{0:d}].Class = {1:s}::GetClass();\n", i, Class->Properties[i].Class->Name);
+//        "        Class.Properties[{0:d}].Class = {1:s}::GetMeta();\n", i, Class->Properties[i].Class->Name);
 //        }
 //        SourceCode += std::format(
 //        "        Class.Properties[{0:d}].Name = \"{2:s}\";\n"
@@ -372,7 +372,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
 //            if (const_cast<CClass*>(Class->ParentClasses[i])->IsReflectClass())
 //            {
 //                SourceCode += std::format(
-//        "        Class.ParentClasses[{0:d}] = {1:s}::GetClass();\n", i, Class->ParentClasses[i]->Name);
+//        "        Class.ParentClasses[{0:d}] = {1:s}::GetMeta();\n", i, Class->ParentClasses[i]->Name);
 //            }
 //        }
 //    }

@@ -1,62 +1,56 @@
 #include "Reflect.h"
 
-CClassTable::CClassTable(){
-    Classes.push_back(nullptr);
+CMetaTable::CMetaTable(){
+    Metas.push_back(nullptr);
 }
 
-CClassTable* GClassTable = &CClassTable::Get();
+CMetaTable* GMetaTable = &CMetaTable::Get();
 
-CClassTable& CClassTable::Get()
+CMetaTable& CMetaTable::Get()
 {
-    static std::function<CClassTable* ()> ClassTableInitializer = []() -> CClassTable* {
-    	static CClassTable ClassTable;
-    	return &ClassTable;
+    static std::function<CMetaTable* ()> MetaTableInitializer = []() -> CMetaTable* {
+    	static CMetaTable MetaTable;
+    	return &MetaTable;
     };
-    static CClassTable* ClassTablePtr = ClassTableInitializer();
-    return *ClassTablePtr;
+    static CMetaTable* MetaTablePtr = MetaTableInitializer();
+    return *MetaTablePtr;
 }
 
-CMeta* CClassTable::GetClass(const char* ClassName)
+CMeta* CMetaTable::GetMeta(const char* MetaName)
 {
-    auto NameToIdIterator = NameToId.find(ClassName);
+    auto NameToIdIterator = NameToId.find(MetaName);
     if (NameToIdIterator != NameToId.end())
-    	return Classes[NameToIdIterator->second];
+    	return Metas[NameToIdIterator->second];
     return nullptr;
 }
 
-CMeta* CClassTable::GetClass(Uint32 ClassId)
+CMeta* CMetaTable::GetMeta(Uint32 MetaId)
 {
-    if (ClassId < Classes.size())
-    	return Classes[ClassId];
+    if (MetaId < Metas.size())
+    	return Metas[MetaId];
     return nullptr;
 }
 
-uint32_t CClassTable::RegisterClassToTable(const char* ClassName, CMeta* Class)
+uint32_t CMetaTable::RegisterMetaToTable(CMeta* Meta)
 {
-    assert(Class != nullptr);
-    assert(std::end(NameToId) == NameToId.find(ClassName));
-
-    if (Class->Id == 0) {
-#ifdef COMPILE_REFLECTOR
-        assert(strcmp(Class->Name.c_str(), ClassName) == 0);
-#else
-        assert(strcmp(Class->Name, ClassName) == 0);
-#endif
-        Class->Id = IdCounter++;
-        Classes.push_back(Class);
-    	NameToId.insert(std::make_pair(ClassName, Class->Id));
+    assert(Meta != nullptr);
+    assert(std::end(NameToId) == NameToId.find(Meta->Name));
+    if (Meta->Id == 0) {
+        Meta->Id = IdCounter++;
+        Metas.push_back(Meta);
+    	NameToId.insert(std::make_pair(Meta->Name, Meta->Id));
     }
     else
     {
 #ifdef COMPILE_REFLECTOR
-        Class->Alias.push_back(ClassName);
+        Meta->Alias.push_back(Meta->Name);
 #endif
-    	NameToId.insert(std::make_pair(ClassName, Class->Id));
+    	NameToId.insert(std::make_pair(Meta->Name, Meta->Id));
     }
-    return Class->Id;
+    return Meta->Id;
 }
 
-void CClassTable::Initialize()
+void CMetaTable::Initialize()
 {
     while (!DeferredRegisterList.empty())
     {

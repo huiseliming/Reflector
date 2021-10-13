@@ -37,7 +37,7 @@ void ParseMethod(const CXXRecordDecl* InCXXRecordDecl, CClass* InClass)
         }
         //QualType ReturnType = Method->getReturnType();
         //if (ReturnType->isVoidType()) {
-        //    Function.Ret.Class = CodeGenerator.ClassTable.GetClass("void");
+        //    Function.Ret.Class = CodeGenerator.MetaTable.GetMeta("void");
         //    Function.Ret.Flag = kQualifierNoFlag;
         //}
         //else {
@@ -82,7 +82,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    CMeta* Meta = CodeGenerator.ClassTable.GetClass(InCXXRecordDecl->getQualifiedNameAsString().c_str());
+    CMeta* Meta = CodeGenerator.MetaTable.GetMeta(InCXXRecordDecl->getQualifiedNameAsString().c_str());
 
     SourceLocation CppFileSourceLocation = InCXXRecordDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
@@ -93,10 +93,10 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
     }
     StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InCXXRecordDecl->getLocation()))->getName();
     StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
-    bool NeedReflectClass = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
+    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
     if (Meta)
     {
-        if (NeedReflectClass) {
+        if (NeedReflectMeta) {
             if (Meta->IsReflectionDataCollectionCompleted)
                 return Meta;
         }
@@ -108,39 +108,39 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
     else
     {
         if (!FindReflectAnnotation(InCXXRecordDecl, { "Class", "Struct" }, ReflectAnnotation)) return nullptr;
-        if (ReflectAnnotation[0] == "Class" && InCXXRecordDecl->isClass()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
-        else if (ReflectAnnotation[0] == "Struct" && InCXXRecordDecl->isStruct()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
+        if (ReflectAnnotation[0] == "Class" && InCXXRecordDecl->isClass()) CodeGenerator.GeneratedReflectMetas.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
+        else if (ReflectAnnotation[0] == "Struct" && InCXXRecordDecl->isStruct()) CodeGenerator.GeneratedReflectMetas.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
         else {
             SourceRange Loc = InCXXRecordDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
             llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), InCXXRecordDecl->getQualifiedNameAsString());
             return nullptr;
         }
-        Meta = CodeGenerator.GeneratedReflectClasses.back().get();
-        CodeGenerator.ClassTable.RegisterClassToTable(Meta->Name.c_str(), Meta);
-        if (!NeedReflectClass) {
+        Meta = CodeGenerator.GeneratedReflectMetas.back().get();
+        CodeGenerator.MetaTable.RegisterMetaToTable(Meta);
+        if (!NeedReflectMeta) {
             return Meta;
         }
     }
     Meta->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
 
-    CStructClass* StructClass = dyn_cast<CStructClass>(Meta);
-    if (StructClass) {
+    CStruct* Struct = dyn_cast<CStruct>(Meta);
+    if (Struct) {
         // parend class parse
         for (auto BasesIterator = InCXXRecordDecl->bases_begin(); BasesIterator != InCXXRecordDecl->bases_end(); BasesIterator++)
         {
             CMeta* ParentMeta = ParseReflectCXXRecord(CodeGenerator, Context, BasesIterator->getType()->getAsCXXRecordDecl());
             //if (!ParentClass)
             //{
-            //    CodeGenerator.OtherClasses.emplace_back(std::make_unique<FNonReflectClass>());
-            //    ParentClass = CodeGenerator.GeneratedReflectClasses.back().get();
+            //    CodeGenerator.OtherMetas.emplace_back(std::make_unique<FNonReflectClass>());
+            //    ParentClass = CodeGenerator.GeneratedReflectMetas.back().get();
             //    ParentClass->Name = BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString();
-            //    CodeGenerator.ClassTable.RegisterClassToTable(ParentClass->Name.c_str(), ParentClass);
+            //    CodeGenerator.MetaTable.RegisterMetaToTable(ParentClass->Name.c_str(), ParentClass);
             //}
             if(ParentMeta) {
-                CStructClass* ParentStructClass = dyn_cast<CStructClass>(ParentMeta);
-                if (ParentStructClass)
-                    StructClass->ParentClasses.push_back(ParentStructClass);
+                CStruct* ParentStruct = dyn_cast<CStruct>(ParentMeta);
+                if (ParentStruct)
+                    Struct->ParentClasses.push_back(ParentStruct);
             }
         }
 
@@ -214,23 +214,23 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             {
                 TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(FieldUnqualifiedType.getTypePtr());
                 if (FieldUnqualifiedType->isSignedIntegerType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 1) StructClass->Properties.push_back(std::make_unique<CInt8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 2) StructClass->Properties.push_back(std::make_unique<CInt16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 4) StructClass->Properties.push_back(std::make_unique<CInt32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) StructClass->Properties.push_back(std::make_unique<CInt64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CInt8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CInt16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CInt32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CInt64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isUnsignedIntegerType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 1) StructClass->Properties.push_back(std::make_unique<CUint8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 2) StructClass->Properties.push_back(std::make_unique<CUint16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 4) StructClass->Properties.push_back(std::make_unique<CUint32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) StructClass->Properties.push_back(std::make_unique<CUint64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CUint8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CUint16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CUint32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CUint64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isFloatingType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 4) StructClass->Properties.push_back(std::make_unique<CFloatProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) StructClass->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CFloatProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isBooleanType()) {
-                    StructClass->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
                 }
                 else{
                     assert(!"???");
@@ -238,29 +238,29 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             }
             else if (FieldUnqualifiedType->isStructureOrClassType())
             {
-                CStructClass* ParsedStructClass = (CStructClass*)ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl());
-                if (ParsedStructClass) {
-                    CClass* ParsedClass = dyn_cast<CClass>(ParsedStructClass);
-                    if (ParsedClass) StructClass->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ParsedClass, 0, PropertyFlag, PropertyNumber));
-                    else StructClass->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ParsedStructClass, 0, PropertyFlag, PropertyNumber));
+                CStruct* ParsedStruct = (CStruct*)ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl());
+                if (ParsedStruct) {
+                    CClass* ParsedClass = dyn_cast<CClass>(ParsedStruct);
+                    if (ParsedClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ParsedClass, 0, PropertyFlag, PropertyNumber));
+                    else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ParsedStruct, 0, PropertyFlag, PropertyNumber));
                 }
                 else
                 {
                     std::string ForwardDeclaredStructName = FieldUnqualifiedType->getAsCXXRecordDecl()->getNameAsString().c_str();
                     if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (PropertyFlag & (CPF_PointerFlag | CPF_ReferenceFlag)))
                     {
-                        CStructClass* ForwardDeclaredStructClass = (CStructClass*)CodeGenerator.ClassTable.GetClass(ForwardDeclaredStructName.c_str());
-                        if (!ForwardDeclaredStructClass) {
-                            if (FieldUnqualifiedType->isStructureType()) CodeGenerator.OtherClasses.emplace_back(std::make_unique<CStructClass>(ForwardDeclaredStructName.c_str()));
-                            else if (FieldUnqualifiedType->isClassType()) CodeGenerator.OtherClasses.emplace_back(std::make_unique<CClass>(ForwardDeclaredStructName.c_str()));
+                        CStruct* ForwardDeclaredStruct = (CStruct*)CodeGenerator.MetaTable.GetMeta(ForwardDeclaredStructName.c_str());
+                        if (!ForwardDeclaredStruct) {
+                            if (FieldUnqualifiedType->isStructureType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CStruct>(ForwardDeclaredStructName.c_str()));
+                            else if (FieldUnqualifiedType->isClassType()) CodeGenerator.OtherMetas.emplace_back(std::make_unique<CClass>(ForwardDeclaredStructName.c_str()));
                             else assert(!"???");
-                            ForwardDeclaredStructClass = (CStructClass*)CodeGenerator.OtherClasses.back().get();
-                            ForwardDeclaredStructClass->IsForwardDeclared = true;
-                            CodeGenerator.ClassTable.RegisterClassToTable(ForwardDeclaredStructName.c_str(), ForwardDeclaredStructClass);
+                            ForwardDeclaredStruct = (CStruct*)CodeGenerator.OtherMetas.back().get();
+                            ForwardDeclaredStruct->IsForwardDeclared = true;
+                            CodeGenerator.MetaTable.RegisterMetaToTable(ForwardDeclaredStruct);
                         }
-                        CClass* ForwardDeclaredClass = dyn_cast<CClass>(ForwardDeclaredStructClass);
-                        if (ForwardDeclaredClass) StructClass->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, 0, PropertyFlag, PropertyNumber));
-                        else StructClass->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStructClass, 0, PropertyFlag, PropertyNumber));
+                        CClass* ForwardDeclaredClass = dyn_cast<CClass>(ForwardDeclaredStruct);
+                        if (ForwardDeclaredClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, 0, PropertyFlag, PropertyNumber));
+                        else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStruct, 0, PropertyFlag, PropertyNumber));
                     }
                     else
                     {
@@ -275,7 +275,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             {
                 CEnumClass* ParsedEnumClass = dyn_cast<CEnumClass>(ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl()));
                 if (ParsedEnumClass) {
-                    StructClass->Properties.push_back(std::make_unique<CEnumProperty>(Field->getName().data(), ParsedEnumClass, 0, PropertyFlag, PropertyNumber));
+                    Struct->Properties.push_back(std::make_unique<CEnumProperty>(Field->getName().data(), ParsedEnumClass, 0, PropertyFlag, PropertyNumber));
                 }
                 else
                 {
@@ -293,7 +293,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             }
         }
         // Function parse
-        CClass* Class = dyn_cast<CClass>(StructClass);
+        CClass* Class = dyn_cast<CClass>(Struct);
         if (Class) 
             ParseMethod(InCXXRecordDecl, Class);
     }
@@ -306,7 +306,7 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    CMeta* Meta = CodeGenerator.ClassTable.GetClass(InEnumDecl->getQualifiedNameAsString().c_str());
+    CMeta* Meta = CodeGenerator.MetaTable.GetMeta(InEnumDecl->getQualifiedNameAsString().c_str());
 
     SourceLocation CppFileSourceLocation = InEnumDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
@@ -317,10 +317,10 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
     }
     StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InEnumDecl->getLocation()))->getName();
     StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
-    bool NeedReflectClass = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
+    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
     if (Meta)
     {
-        if (NeedReflectClass)
+        if (NeedReflectMeta)
             if (Meta->IsReflectionDataCollectionCompleted) return Meta;
             else return Meta;
     }
@@ -328,10 +328,10 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
     {
         if (!FindReflectAnnotation(InEnumDecl, "Enum", ReflectAnnotation)) return nullptr;
         assert(InEnumDecl->isEnum());
-        CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CEnumClass>(InEnumDecl->getQualifiedNameAsString().c_str()));
-        Meta = CodeGenerator.GeneratedReflectClasses.back().get();
-        CodeGenerator.ClassTable.RegisterClassToTable(Meta->Name.c_str(), Meta);
-        if (!NeedReflectClass) {
+        CodeGenerator.GeneratedReflectMetas.emplace_back(std::make_unique<CEnumClass>(InEnumDecl->getQualifiedNameAsString().c_str()));
+        Meta = CodeGenerator.GeneratedReflectMetas.back().get();
+        CodeGenerator.MetaTable.RegisterMetaToTable(Meta);
+        if (!NeedReflectMeta) {
             return Meta;
         }
     }
@@ -351,9 +351,9 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
 
 CMeta* ParseReflectClass(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const TagDecl* InTagDecl)
 {
-    const CXXRecordDecl* ClassCXXRecordDecl = dyn_cast<CXXRecordDecl>(InTagDecl);
-    if (ClassCXXRecordDecl) return ParseReflectCXXRecord(CodeGenerator, Context, ClassCXXRecordDecl);
-    const EnumDecl* ClassEnumDecl = dyn_cast<EnumDecl>(InTagDecl);
-    if (ClassEnumDecl) return ParseReflectEnum(CodeGenerator, Context, ClassEnumDecl);
+    const CXXRecordDecl* CastCXXRecordDecl = dyn_cast<CXXRecordDecl>(InTagDecl);
+    if (CastCXXRecordDecl) return ParseReflectCXXRecord(CodeGenerator, Context, CastCXXRecordDecl);
+    const EnumDecl* CastEnumDecl = dyn_cast<EnumDecl>(InTagDecl);
+    if (CastEnumDecl) return ParseReflectEnum(CodeGenerator, Context, CastEnumDecl);
     return nullptr;
 }
