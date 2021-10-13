@@ -30,10 +30,10 @@ void ParseMethod(const CXXRecordDecl* InCXXRecordDecl, CClass* InClass)
         Function.Name = Method->getNameAsString();
         (void)Function.Ptr;
         Function.OwnerClass = InClass;
-        Function.Flag |= kMemberFlagBit;
+        Function.Flag |= EFF_MemberFlag;
         if (Method->isStatic())
         {
-            Function.Flag |= kStaticFlagBit;
+            Function.Flag |= EFF_StaticFlag;
         }
         //QualType ReturnType = Method->getReturnType();
         //if (ReturnType->isVoidType()) {
@@ -56,21 +56,21 @@ void ParseMethod(const CXXRecordDecl* InCXXRecordDecl, CClass* InClass)
     // check constructor and destructor 
     if (UserDeclaredDefaultConstructor) {
         if (!UserDeclaredDefaultConstructor->isDeleted())
-            InClass->Flag |= kHasDefaultConstructorFlagBit;
+            InClass->AddFlag(ECF_DefaultConstructorExist);
     }
     else {
         if (InCXXRecordDecl->hasDefaultConstructor()) {
-            InClass->Flag |= kHasDefaultConstructorFlagBit;
+            InClass->AddFlag(ECF_DefaultConstructorExist);
         }
     }
     auto Destructor = InCXXRecordDecl->getDestructor();
     if (Destructor) {
         if (!Destructor->isDeleted())
-            InClass->Flag |= kHasDestructorFlagBit;
+            InClass->AddFlag(ECF_DefaultDestructorExist);
     }
     else {
         if (InCXXRecordDecl->hasSimpleDestructor())
-            InClass->Flag |= kHasDestructorFlagBit;
+            InClass->AddFlag(ECF_DefaultDestructorExist);
     }
 }
 
@@ -150,10 +150,10 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             if (!FindReflectAnnotation(*Field, "Property", ReflectAnnotation)) continue;
             QualType FieldType = Field->getType();
             QualType FieldUnqualifiedType = Field->getType();
-            EPropertyFlag PropertyFlag = CPF_NoneFlag;
+            EPropertyFlag PropertyFlag = EPF_NoneFlag;
             //Uint32 PropertyOffset = 0;
             Uint32 PropertyNumber = 1;
-            //Class->Properties.push_back(CProperty(0x0, CPF_NoneFlag));
+            //Class->Properties.push_back(CProperty(0x0, EPF_NoneFlag));
             //Class->Properties.back().Name = Field->getName().str();
             //PropertyOffset = RecordLayout.getFieldOffset(Field->getFieldIndex());
             // if is array
@@ -170,7 +170,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                 TypeInfo ArrayElementTypeInfo = Context->getTypeInfo(ArrayElementType);
                 PropertyNumber = FieldTypeTypeInfo.Width / ArrayElementTypeInfo.Width;
                 FieldUnqualifiedType = ArrayElementType;
-                PropertyFlag = EPropertyFlag(PropertyFlag | CPF_ArrayFlag);
+                PropertyFlag = EPropertyFlag(PropertyFlag | EPF_ArrayFlag);
             }
             else
             {
@@ -179,16 +179,16 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             // if is pointer type
             if (FieldUnqualifiedType->isPointerType())
             {
-                PropertyFlag = EPropertyFlag(PropertyFlag | CPF_PointerFlag);
+                PropertyFlag = EPropertyFlag(PropertyFlag | EPF_PointerFlag);
                 if (FieldUnqualifiedType.isConstant(*Context))
-                    PropertyFlag = EPropertyFlag(PropertyFlag | CPF_ConstPointerceFlag);
+                    PropertyFlag = EPropertyFlag(PropertyFlag | EPF_ConstPointerceFlag);
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
             // if is reference type
             if (FieldUnqualifiedType->isReferenceType())
             {
-                PropertyFlag = EPropertyFlag(PropertyFlag | CPF_ReferenceFlag);
+                PropertyFlag = EPropertyFlag(PropertyFlag | EPF_ReferenceFlag);
                 QualType PointeeType = FieldUnqualifiedType->getPointeeType();
                 FieldUnqualifiedType = PointeeType;
             }
@@ -207,30 +207,30 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                 return nullptr;
             }
             if (FieldUnqualifiedType.isConstant(*Context)) {
-                PropertyFlag = EPropertyFlag(PropertyFlag | CPF_ConstValueFlag);
+                PropertyFlag = EPropertyFlag(PropertyFlag | EPF_ConstValueFlag);
                 FieldUnqualifiedType = FieldUnqualifiedType.getUnqualifiedType();
             }
             if (FieldUnqualifiedType->isBuiltinType())
             {
                 TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(FieldUnqualifiedType.getTypePtr());
                 if (FieldUnqualifiedType->isSignedIntegerType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CInt8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CInt16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CInt32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CInt64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CInt8Property> (Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CInt16Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CInt32Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CInt64Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isUnsignedIntegerType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CUint8Property> (Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CUint16Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CUint32Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CUint64Property>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 1) Struct->Properties.push_back(std::make_unique<CUint8Property> (Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 2) Struct->Properties.push_back(std::make_unique<CUint16Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CUint32Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CUint64Property>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isFloatingType()) {
-                    if      (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CFloatProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
-                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    if      (FieldTypeTypeInfo.Width / 8 == 4) Struct->Properties.push_back(std::make_unique<CFloatProperty>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
+                    else if (FieldTypeTypeInfo.Width / 8 == 8) Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
                 }
                 else if (FieldUnqualifiedType->isBooleanType()) {
-                    Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                    Struct->Properties.push_back(std::make_unique<CDoubleProperty>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
                 }
                 else{
                     assert(!"???");
@@ -241,18 +241,18 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                 CStruct* ParsedStruct = (CStruct*)ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl());
                 if (ParsedStruct) {
                     CClass* ParsedClass = dyn_cast<CClass>(ParsedStruct);
-                    if (ParsedClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ParsedClass, 0, PropertyFlag, PropertyNumber));
-                    else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ParsedStruct, 0, PropertyFlag, PropertyNumber));
+                    if (ParsedClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ParsedClass, PropertyFlag, 0, PropertyNumber));
+                    else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ParsedStruct, PropertyFlag, 0, PropertyNumber));
                 }
                 else
                 {
                     if (FieldUnqualifiedType.getAsString() == "std::string") {
-                        Struct->Properties.push_back(std::make_unique<CStringProperty>(Field->getName().data(), 0, PropertyFlag, PropertyNumber));
+                        Struct->Properties.push_back(std::make_unique<CStringProperty>(Field->getName().data(), PropertyFlag, 0, PropertyNumber));
                     }
                     else
                     {
                         std::string ForwardDeclaredStructName = FieldUnqualifiedType->getAsCXXRecordDecl()->getNameAsString().c_str();
-                        if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (PropertyFlag & (CPF_PointerFlag | CPF_ReferenceFlag)))
+                        if (!FieldUnqualifiedType->getAsCXXRecordDecl()->isThisDeclarationADefinition() && (PropertyFlag & (EPF_PointerFlag | EPF_ReferenceFlag)))
                         {
                             CStruct* ForwardDeclaredStruct = (CStruct*)CodeGenerator.MetaTable.GetMeta(ForwardDeclaredStructName.c_str());
                             if (!ForwardDeclaredStruct) {
@@ -264,8 +264,8 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
                                 CodeGenerator.MetaTable.RegisterMetaToTable(ForwardDeclaredStruct);
                             }
                             CClass* ForwardDeclaredClass = dyn_cast<CClass>(ForwardDeclaredStruct);
-                            if (ForwardDeclaredClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, 0, PropertyFlag, PropertyNumber));
-                            else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStruct, 0, PropertyFlag, PropertyNumber));
+                            if (ForwardDeclaredClass) Struct->Properties.push_back(std::make_unique<CClassProperty>(Field->getName().data(), ForwardDeclaredClass, PropertyFlag, 0, PropertyNumber));
+                            else Struct->Properties.push_back(std::make_unique<CStructProperty>(Field->getName().data(), ForwardDeclaredStruct, PropertyFlag, 0, PropertyNumber));
                         }
                         else
                         {
@@ -282,7 +282,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             {
                 CEnumClass* ParsedEnumClass = dyn_cast<CEnumClass>(ParseReflectClass(CodeGenerator, Context, FieldUnqualifiedType->getAsCXXRecordDecl()));
                 if (ParsedEnumClass) {
-                    Struct->Properties.push_back(std::make_unique<CEnumProperty>(Field->getName().data(), ParsedEnumClass, 0, PropertyFlag, PropertyNumber));
+                    Struct->Properties.push_back(std::make_unique<CEnumProperty>(Field->getName().data(), ParsedEnumClass, PropertyFlag, 0, PropertyNumber));
                 }
                 else
                 {

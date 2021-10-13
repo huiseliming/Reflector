@@ -211,45 +211,45 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
         for (size_t i = 0; i < Struct->Properties.size(); i++)
         {
             CProperty* Property = Struct->Properties[i].get();
-            switch (Struct->Properties[i]->Flag & CPF_TypeMaskBitFlag)
+            switch (Struct->Properties[i]->Flag & EPF_TypeMaskBitFlag)
             {
-            case CPF_BoolFlag       :
+            case EPF_BoolFlag       :
                 SourceCode += std::format(StructDef[3], S0Str, "Bool", 
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}", 
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_Int8Flag       :
-	        case CPF_Int16Flag      :
-	        case CPF_Int32Flag      :
-	        case CPF_Int64Flag      :
-                SourceCode += std::format(StructDef[3], S0Str, std::format("Int{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Int8Flag)),
+	        case EPF_Int8Flag       :
+	        case EPF_Int16Flag      :
+	        case EPF_Int32Flag      :
+	        case EPF_Int64Flag      :
+                SourceCode += std::format(StructDef[3], S0Str, std::format("Int{:d}", 8 * (Struct->Properties[i]->Flag / EPF_Int8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_Uint8Flag      :
-	        case CPF_Uint16Flag     :
-	        case CPF_Uint32Flag     :
-	        case CPF_Uint64Flag     :
-                SourceCode += std::format(StructDef[3], S0Str, std::format("Uint{:d}", 8 * (Struct->Properties[i]->Flag / CPF_Uint8Flag)),
+	        case EPF_Uint8Flag      :
+	        case EPF_Uint16Flag     :
+	        case EPF_Uint32Flag     :
+	        case EPF_Uint64Flag     :
+                SourceCode += std::format(StructDef[3], S0Str, std::format("Uint{:d}", 8 * (Struct->Properties[i]->Flag / EPF_Uint8Flag)),
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_FloatFlag  :
+	        case EPF_FloatFlag  :
                 SourceCode += std::format(StructDef[3], S0Str, "Float",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_DoubleFlag :
+	        case EPF_DoubleFlag :
                 SourceCode += std::format(StructDef[3], S0Str, "Double",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_StringFlag     :
+	        case EPF_StringFlag     :
                 SourceCode += std::format(StructDef[3], S0Str, "String",
                     std::format("\"{0:s}\", offsetof({1:s},{0:s}), EPropertyFlag({2:#010x}), {3:d}",
                         Property->Name, Struct->Name, (Uint32)Property->Flag, Property->Number));
                 break;
-	        case CPF_StructFlag     :
+	        case EPF_StructFlag     :
             {
                 CStructProperty* StructProperty = (CStructProperty*)Property;
                 if (StructProperty->Meta->IsForwardDeclared)
@@ -267,7 +267,7 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
                 }
                 break;
             }
-	        case CPF_ClassFlag      :
+	        case EPF_ClassFlag      :
             {
                 CClassProperty* ClassProperty = (CClassProperty*)Property;
                 if(ClassProperty->Meta->IsForwardDeclared)
