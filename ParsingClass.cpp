@@ -78,20 +78,20 @@ void ParseMethod(const CXXRecordDecl* InCXXRecordDecl, CClass* InClass)
 
 
 
-CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const CXXRecordDecl* ClassCXXRecordDecl)
+CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const CXXRecordDecl* InCXXRecordDecl)
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    CMeta* Meta = CodeGenerator.ClassTable.GetClass(ClassCXXRecordDecl->getQualifiedNameAsString().c_str());
+    CMeta* Meta = CodeGenerator.ClassTable.GetClass(InCXXRecordDecl->getQualifiedNameAsString().c_str());
 
-    SourceLocation CppFileSourceLocation = ClassCXXRecordDecl->getLocation();
+    SourceLocation CppFileSourceLocation = InCXXRecordDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     while (TempSourceLocation.isValid())
     {
         CppFileSourceLocation = TempSourceLocation;
         TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     }
-    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(ClassCXXRecordDecl->getLocation()))->getName();
+    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InCXXRecordDecl->getLocation()))->getName();
     StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
     bool NeedReflectClass = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
     if (Meta)
@@ -107,13 +107,13 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
     }
     else
     {
-        if (!FindReflectAnnotation(ClassCXXRecordDecl, { "Class", "Struct" }, ReflectAnnotation)) return nullptr;
-        if (ReflectAnnotation[0] == "Class" && ClassCXXRecordDecl->isClass()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(ClassCXXRecordDecl->getQualifiedNameAsString().c_str()));
-        else if (ReflectAnnotation[0] == "Struct" && ClassCXXRecordDecl->isStruct()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(ClassCXXRecordDecl->getQualifiedNameAsString().c_str()));
+        if (!FindReflectAnnotation(InCXXRecordDecl, { "Class", "Struct" }, ReflectAnnotation)) return nullptr;
+        if (ReflectAnnotation[0] == "Class" && InCXXRecordDecl->isClass()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
+        else if (ReflectAnnotation[0] == "Struct" && InCXXRecordDecl->isStruct()) CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CClass>(InCXXRecordDecl->getQualifiedNameAsString().c_str()));
         else {
-            SourceRange Loc = ClassCXXRecordDecl->getSourceRange();
+            SourceRange Loc = InCXXRecordDecl->getSourceRange();
             PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
-            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), ClassCXXRecordDecl->getQualifiedNameAsString());
+            llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Unsupported this  unknown type<???>", PLoc.getFilename(), PLoc.getLine(), InCXXRecordDecl->getQualifiedNameAsString());
             return nullptr;
         }
         Meta = CodeGenerator.GeneratedReflectClasses.back().get();
@@ -127,7 +127,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
     CStructClass* StructClass = dyn_cast<CStructClass>(Meta);
     if (StructClass) {
         // parend class parse
-        for (auto BasesIterator = ClassCXXRecordDecl->bases_begin(); BasesIterator != ClassCXXRecordDecl->bases_end(); BasesIterator++)
+        for (auto BasesIterator = InCXXRecordDecl->bases_begin(); BasesIterator != InCXXRecordDecl->bases_end(); BasesIterator++)
         {
             CMeta* ParentMeta = ParseReflectCXXRecord(CodeGenerator, Context, BasesIterator->getType()->getAsCXXRecordDecl());
             //if (!ParentClass)
@@ -145,7 +145,7 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         }
 
         //const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(ClassCXXRecordDecl);
-        for (auto Field = ClassCXXRecordDecl->field_begin(); Field != ClassCXXRecordDecl->field_end(); Field++)
+        for (auto Field = InCXXRecordDecl->field_begin(); Field != InCXXRecordDecl->field_end(); Field++)
         {
             if (!FindReflectAnnotation(*Field, "Property", ReflectAnnotation)) continue;
             QualType FieldType = Field->getType();
@@ -295,27 +295,27 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         // Function parse
         CClass* Class = dyn_cast<CClass>(StructClass);
         if (Class) 
-            ParseMethod(ClassCXXRecordDecl, Class);
+            ParseMethod(InCXXRecordDecl, Class);
     }
     Meta->IsReflectionDataCollectionCompleted = true;
     //llvm::outs() << Class->Dump();
     return Meta;
 }
 
-CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const EnumDecl* ClassEnumDecl)
+CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const EnumDecl* InEnumDecl)
 {
     std::vector<std::string> ReflectAnnotation;
     SourceManager& SM = Context->getSourceManager();
-    CMeta* Meta = CodeGenerator.ClassTable.GetClass(ClassEnumDecl->getQualifiedNameAsString().c_str());
+    CMeta* Meta = CodeGenerator.ClassTable.GetClass(InEnumDecl->getQualifiedNameAsString().c_str());
 
-    SourceLocation CppFileSourceLocation = ClassEnumDecl->getLocation();
+    SourceLocation CppFileSourceLocation = InEnumDecl->getLocation();
     SourceLocation TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     while (TempSourceLocation.isValid())
     {
         CppFileSourceLocation = TempSourceLocation;
         TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     }
-    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(ClassEnumDecl->getLocation()))->getName();
+    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InEnumDecl->getLocation()))->getName();
     StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
     bool NeedReflectClass = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
     if (Meta)
@@ -326,9 +326,9 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
     }
     else
     {
-        if (!FindReflectAnnotation(ClassEnumDecl, "Enum", ReflectAnnotation)) return nullptr;
-        assert(ClassEnumDecl->isEnum());
-        CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CEnumClass>(ClassEnumDecl->getQualifiedNameAsString().c_str()));
+        if (!FindReflectAnnotation(InEnumDecl, "Enum", ReflectAnnotation)) return nullptr;
+        assert(InEnumDecl->isEnum());
+        CodeGenerator.GeneratedReflectClasses.emplace_back(std::make_unique<CEnumClass>(InEnumDecl->getQualifiedNameAsString().c_str()));
         Meta = CodeGenerator.GeneratedReflectClasses.back().get();
         CodeGenerator.ClassTable.RegisterClassToTable(Meta->Name.c_str(), Meta);
         if (!NeedReflectClass) {
@@ -338,9 +338,9 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
     Meta->DeclaredFile = std::string(DeclHeaderFile.data(), DeclHeaderFile.size());
     CEnumClass* EnumClass = dyn_cast<CEnumClass>(Meta);
     if (EnumClass) {
-        TypeInfo FieldTypeTypeInfo = Context->getTypeInfo(ClassEnumDecl->getTypeForDecl());
-        EnumClass->Size = FieldTypeTypeInfo.Width;
-        for (auto Iterator = ClassEnumDecl->enumerator_begin(); Iterator != ClassEnumDecl->enumerator_end(); Iterator++)
+        TypeInfo EnumTypeInfo = Context->getTypeInfo(InEnumDecl->getTypeForDecl());
+        EnumClass->Size = EnumTypeInfo.Width;
+        for (auto Iterator = InEnumDecl->enumerator_begin(); Iterator != InEnumDecl->enumerator_end(); Iterator++)
         {
             EnumClass->Options.push_back(std::make_pair<>(Iterator->getNameAsString(), Iterator->getInitVal().getZExtValue()));
         }
@@ -349,11 +349,11 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
     return Meta;
 }
 
-CMeta* ParseReflectClass(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const TagDecl* ClassTagDecl)
+CMeta* ParseReflectClass(CCodeGenerator& CodeGenerator, clang::ASTContext* const Context, const TagDecl* InTagDecl)
 {
-    const CXXRecordDecl* ClassCXXRecordDecl = dyn_cast<CXXRecordDecl>(ClassTagDecl);
+    const CXXRecordDecl* ClassCXXRecordDecl = dyn_cast<CXXRecordDecl>(InTagDecl);
     if (ClassCXXRecordDecl) return ParseReflectCXXRecord(CodeGenerator, Context, ClassCXXRecordDecl);
-    const EnumDecl* ClassEnumDecl = dyn_cast<EnumDecl>(ClassTagDecl);
+    const EnumDecl* ClassEnumDecl = dyn_cast<EnumDecl>(InTagDecl);
     if (ClassEnumDecl) return ParseReflectEnum(CodeGenerator, Context, ClassEnumDecl);
     return nullptr;
 }
