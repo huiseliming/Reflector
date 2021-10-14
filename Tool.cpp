@@ -101,9 +101,17 @@ void ParsingMetaString(CMeta* Meta, std::vector<std::string>& ReflectAnnotation)
                 }
             }
             std::string Str(MetaString.data() + PreviousPos, MetaString.size() - PreviousPos);
-            size_t Pos = Str.find_last_of('=');
-            std::string Key = Str.substr(0, Pos);
-            std::string Value = Str.substr(Pos + 1);
+            size_t Pos = Str.find_first_of('=');
+            std::string Key;
+            std::string Value;
+            if (Pos == std::string::npos) {
+                Key = Str;
+            }
+            else
+            {
+                Key = Str.substr(0, Pos);
+                Value = Str.substr(Pos + 1);
+            }
             Meta->Data.insert_or_assign(Key, Value);
         }
     }
