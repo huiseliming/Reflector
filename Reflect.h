@@ -175,7 +175,10 @@ public:
 #endif // COMPILE_REFLECTOR
 };
 
-
+struct CORE_API CInterface : public CMeta
+{
+	std::vector<FFunction> Functions;
+};
 
 struct CORE_API CStruct : public CMeta
 {
@@ -194,13 +197,13 @@ struct CORE_API CStruct : public CMeta
 #endif
 	size_t Size{ 0 };
 	std::vector<std::unique_ptr<CProperty>> Properties;
-	std::vector<const CStruct*> ParentClasses;
+	const CStruct* Parent;
+	std::vector<const CInterface*> Interfaces;
 
 	FPNew         New        { nullptr };
 	FPDelete      Delete     { nullptr };
 	FPConstructor Constructor{ nullptr };
 	FPDestructor  Destructor { nullptr };
-
 };
 
 struct CORE_API CClass : public CStruct

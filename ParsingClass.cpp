@@ -130,6 +130,30 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         for (auto BasesIterator = InCXXRecordDecl->bases_begin(); BasesIterator != InCXXRecordDecl->bases_end(); BasesIterator++)
         {
             CMeta* ParentMeta = ParseReflectCXXRecord(CodeGenerator, Context, BasesIterator->getType()->getAsCXXRecordDecl());
+            if (BasesIterator == InCXXRecordDecl->bases_begin()) 
+            {
+                if (ParentMeta) {
+                    CStruct* ParentStruct = dyn_cast<CStruct>(ParentMeta);
+                    if (ParentStruct)
+                        Struct->Parent = ParentStruct;
+                }
+            }
+            else
+            {
+                // must be interface 
+                if (BasesIterator->getType()->getAsCXXRecordDecl()->hasDirectFields())
+                {
+                    SourceRange Loc = InCXXRecordDecl->getSourceRange();
+                    PresumedLoc PLoc = Context->getSourceManager().getPresumedLoc(Loc.getBegin());
+                    llvm::errs() << std::format("<{:s}:{:d}> <{:s}> Inherited interface<> has field\n", PLoc.getFilename(), PLoc.getLine(), BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString());
+                    return nullptr;
+                }
+                if (ParentMeta) {
+                    CInterface* ParentStruct = dyn_cast<CInterface>(ParentMeta);
+                    if (ParentStruct)
+                        Struct->Interfaces.push_back(ParentStruct);
+                }
+            }
             //if (!ParentClass)
             //{
             //    CodeGenerator.OtherMetas.emplace_back(std::make_unique<FNonReflectClass>());
@@ -137,11 +161,6 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
             //    ParentClass->Name = BasesIterator->getType()->getAsCXXRecordDecl()->getQualifiedNameAsString();
             //    CodeGenerator.MetaTable.RegisterMetaToTable(ParentClass->Name.c_str(), ParentClass);
             //}
-            if(ParentMeta) {
-                CStruct* ParentStruct = dyn_cast<CStruct>(ParentMeta);
-                if (ParentStruct)
-                    Struct->ParentClasses.push_back(ParentStruct);
-            }
         }
 
         //const ASTRecordLayout& RecordLayout = Context->getASTRecordLayout(ClassCXXRecordDecl);
