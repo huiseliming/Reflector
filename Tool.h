@@ -14,5 +14,5 @@ void ParsingMetaString(CMeta* Meta, std::vector<std::string>& ReflectAnnotation)
 
 //std::string GetDeclFileAbsPath(clang::ASTContext* const Context, const clang::Decl* D);
 
-bool IsMatchedCppHeaderAndSource(const char* HeaderFile, uint32_t HeaderFileLength, const char* SourceFile, uint32_t SourceFileLength);
+bool IsMatchedCppHeaderAndSource(std::string& HeaderFile, std::string& SourceFile);
 

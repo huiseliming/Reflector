@@ -132,6 +132,7 @@ public:
 	/// LLVM-style RTTI
 	enum EMetaKind {
 		EMK_Meta,
+		EFK_Interface,
 		EFK_EnumClass,
 		EFK_Struct,
 		EFK_Class,
@@ -177,6 +178,19 @@ public:
 
 struct CORE_API CInterface : public CMeta
 {
+#ifdef COMPILE_REFLECTOR
+	CInterface(const char* InName, Uint32 InFlag = ECF_NoneFlag, EMetaKind Kind = EFK_Interface)
+		: CMeta(InName, InFlag, Kind)
+	{}
+
+	static bool classof(const CMeta* F) {
+		return F->GetKind() == EFK_Interface;
+	}
+#else
+	CInterface(const char* InName)
+		: CMeta(InName, ECF_NoneFlag)
+	{}
+#endif
 	std::vector<FFunction> Functions;
 };
 

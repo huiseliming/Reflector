@@ -128,28 +128,15 @@ void ParsingMetaString(CMeta* Meta, std::vector<std::string>& ReflectAnnotation)
 //        return std::filesystem::canonical(std::filesystem::path(CCodeGenerator::Get().BuildPath + "/" + File.string())).string();
 //}
 
-bool IsMatchedCppHeaderAndSource(const char* HeaderFile, uint32_t HeaderFileLength, const char* SourceFile, uint32_t SourceFileLength)
+bool IsMatchedCppHeaderAndSource(std::string& HeaderFile, std::string& SourceFile)
 {
-    uint32_t Len = std::min(HeaderFileLength, SourceFileLength);
-    uint32_t CmpPos = UINT32_MAX;
-    for (uint32_t i = 0; i < Len; i++)
+    std::string HeaderFileName = std::filesystem::path(HeaderFile).filename().string();
+    std::string SourceFileName = std::filesystem::path(SourceFile).filename().string();
+    size_t HeaderPos = HeaderFileName.find_last_of(".");
+    size_t SourcePos = SourceFileName.find_last_of(".");
+    if (HeaderFileName.substr(0, HeaderPos) == SourceFileName.substr(0, SourcePos))
     {
-        if (HeaderFile[i] != SourceFile[i] &&
-            !((HeaderFile[i] == '/' || HeaderFile[i] == '\\') && (SourceFile[i] == '/' || SourceFile[i] == '\\')))
-        {
-            CmpPos = i;
-            break;
-        }
+        return true;
     }
-    bool IsCppHeaderSuffix = false;
-    bool IsCppSourceSuffix = false;
-    if ((HeaderFileLength - CmpPos == 1 && 0 == strncmp(&HeaderFile[CmpPos], "h", 1)) ||
-        (HeaderFileLength - CmpPos == 3 && 0 == strncmp(&HeaderFile[CmpPos], "hpp", 3))) {
-        IsCppHeaderSuffix = true;
-    }
-    if ((SourceFileLength - CmpPos == 1 && 0 == strncmp(&SourceFile[CmpPos], "c", 1)) ||
-        (SourceFileLength - CmpPos == 3 && 0 == strncmp(&SourceFile[CmpPos], "cpp", 3))) {
-        IsCppSourceSuffix = true;
-    }
-    return IsCppHeaderSuffix && IsCppSourceSuffix;
+    return false;
 }

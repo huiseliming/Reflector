@@ -4,6 +4,7 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "Tool.h"
+#include <filesystem>
 
 using namespace llvm;
 using namespace clang;
@@ -91,9 +92,9 @@ CMeta* ParseReflectCXXRecord(CCodeGenerator& CodeGenerator, clang::ASTContext* c
         CppFileSourceLocation = TempSourceLocation;
         TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     }
-    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InCXXRecordDecl->getLocation()))->getName();
-    StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
-    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
+    std::string DeclHeaderFile = std::filesystem::canonical(std::filesystem::path(SM.getFileEntryForID(SM.getFileID(InCXXRecordDecl->getLocation()))->getName().str())).string();
+    std::string CurrentSourceFile = std::filesystem::canonical(std::filesystem::path(SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName().str())).string();
+    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile ,CurrentSourceFile);
     if (Meta)
     {
         if (NeedReflectMeta) {
@@ -342,9 +343,9 @@ CMeta* ParseReflectEnum(CCodeGenerator& CodeGenerator, clang::ASTContext* const 
         CppFileSourceLocation = TempSourceLocation;
         TempSourceLocation = SM.getIncludeLoc(SM.getFileID(CppFileSourceLocation));
     }
-    StringRef DeclHeaderFile = SM.getFileEntryForID(SM.getFileID(InEnumDecl->getLocation()))->getName();
-    StringRef CurrentSourceFile = SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName();
-    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile.data(), DeclHeaderFile.size(), CurrentSourceFile.data(), CurrentSourceFile.size());
+    std::string DeclHeaderFile = std::filesystem::canonical(std::filesystem::path(SM.getFileEntryForID(SM.getFileID(InEnumDecl->getLocation()))->getName().str())).string();
+    std::string CurrentSourceFile = std::filesystem::canonical(std::filesystem::path(SM.getFileEntryForID(SM.getFileID(CppFileSourceLocation))->getName().str())).string();
+    bool NeedReflectMeta = IsMatchedCppHeaderAndSource(DeclHeaderFile, CurrentSourceFile);
     if (Meta)
     {
         if (NeedReflectMeta)
