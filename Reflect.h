@@ -65,6 +65,21 @@ typedef void  (*FPDestructor)(void* O);
 struct CClass;
 struct CProperty;
 
+// [Begin, End)
+template<typename T>
+struct CRange 
+{
+	T Begin;
+	T End;
+	bool InRange(T In)
+	{
+		return Begin <= In && In < End;
+	}
+};
+
+typedef CRange<Uint32> CUint32Range;
+
+
 enum EClassFlag :Uint32 {
 	ECF_NoneFlag                = 0x00000000,
 	ECF_DefaultConstructorExist = 0x00000001,
@@ -211,8 +226,11 @@ struct CORE_API CStruct : public CMeta
 #endif
 	size_t Size{ 0 };
 	std::vector<std::unique_ptr<CProperty>> Properties;
-	const CStruct* Parent;
+	CStruct* Parent{nullptr};
 	std::vector<const CInterface*> Interfaces;
+
+	// CAST RANGE [CastStart, CastEnd)
+	CUint32Range CastRange;
 
 	FPNew         New        { nullptr };
 	FPDelete      Delete     { nullptr };
@@ -264,6 +282,7 @@ public:
 	std::vector<CMeta*> Metas;
 	std::atomic<int32_t> IdCounter{ 1 };
 	std::list<std::function<bool()>> DeferredRegisterList;
+	std::list<std::function<void()>> StaticMetaIdInitializerList;
 
 	static CMetaTable& Get();
 
@@ -301,7 +320,8 @@ struct TMetaAutoRegister {
 	TMetaAutoRegister()
 	{
 		const CMeta* Meta = T::StaticMeta();
-		T::MetaId = CMetaTable::Get().RegisterMetaToTable(const_cast<CMeta*>(Meta));
+		CMetaTable::Get().RegisterMetaToTable(const_cast<CMeta*>(Meta));
+		CMetaTable::Get().StaticMetaIdInitializerList.push_back([Meta] { T::MetaId = Meta->Id; });
 	}
 };
 
