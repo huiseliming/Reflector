@@ -1,6 +1,11 @@
 #include <algorithm>
 #include <map>
 #include "Reflect.h"
+#ifdef CORE_MODULE
+#include "Logger.h"
+#include <chrono>
+#endif // CORE_MODULE
+
 CMetaTable::CMetaTable(){
     Metas.push_back(nullptr);
 }
@@ -53,6 +58,9 @@ uint32_t CMetaTable::RegisterMetaToTable(CMeta* Meta)
 
 void CMetaTable::Initialize()
 {
+#ifdef CORE_MODULE
+    std::chrono::steady_clock::time_point Start = std::chrono::steady_clock::now();
+#endif // CORE_MODULE
     // complete deferred register
     while (!DeferredRegisterList.empty())
     {
@@ -72,7 +80,7 @@ void CMetaTable::Initialize()
     std::map<CStruct*, FNode*> Root;
     std::list<FNode*> DeferredList;
     std::list<CMeta*> OtherMeta;
-    for (size_t i = 0; i < Metas.size(); i++)
+    for (size_t i = 1; i < Metas.size(); i++)
     {
         CMeta* Meta = Metas[i];
         CStruct* Struct = dynamic_cast<CStruct*>(Meta);
@@ -113,11 +121,12 @@ void CMetaTable::Initialize()
             }
         }
     }
-
     // remap id
+    std::map<Uint32, Uint32> RemapId;
     Uint32 CurrentMetaId = 1;
     for (auto Iterator = OtherMeta.begin(); Iterator != OtherMeta.end(); Iterator++)
     {
+        RemapId.insert(std::make_pair((*Iterator)->Id, CurrentMetaId));
         (*Iterator)->Id = CurrentMetaId;
         Metas[CurrentMetaId] = (*Iterator);
         CurrentMetaId++;
@@ -126,9 +135,10 @@ void CMetaTable::Initialize()
     std::function<void(FNode*)> CalculateCastRange = [&](FNode* Node)
     {
         Node->Struct->CastRange.Begin = CurrentMetaId;
-        CurrentMetaId++;
+        RemapId.insert(std::make_pair(Node->Struct->Id, CurrentMetaId));
         Node->Struct->Id = CurrentMetaId;
         Metas[CurrentMetaId] = Node->Struct;
+        CurrentMetaId++;
         for (auto Iterator = Node->Childs.begin(); Iterator != Node->Childs.end(); Iterator++)
         {
             CalculateCastRange(Iterator->second);
@@ -139,11 +149,19 @@ void CMetaTable::Initialize()
         CalculateCastRange(Ref.second);; 
         delete Ref.second;
     });
+
+    std::for_each(NameToId.begin(), NameToId.end(), [&] (std::map<std::string, Uint32>::reference Ref) {
+        Ref.second = RemapId.find(Ref.second)->second;
+    });
+
     // Initialize StaticMetaId
     while (!StaticMetaIdInitializerList.empty())
     {
         StaticMetaIdInitializerList.front()();
         StaticMetaIdInitializerList.pop_front();
     }
+#ifdef CORE_MODULE
+    std::chrono::steady_clock::time_point End = std::chrono::steady_clock::now();
+    GLogger->Log(ELogLevel::kDebug, "GMetaTable Initialize in {:f} seconds", std::chrono::duration<double>(End - Start).count());
+#endif // CORE_MODULE
 }
-

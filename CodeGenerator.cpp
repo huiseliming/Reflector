@@ -192,13 +192,14 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
             "{0:s}        Struct.Properties.back()->Data = {{\n",//4
             "{0:s}            {{ \"{1:s}\", \"{2:s}\" }},\n",//5
             "{0:s}        }};\n",//6
+            "{0:s}        {1:s}\n",//7
             "{0:s}        return &Struct;\n"
             "{0:s}    }};\n"
             "{0:s}    static CStruct* StructPtr = ClassInitializer();\n"
             "{0:s}    return StructPtr;\n"
             "{0:s}}}\n\n"
             "Uint32 {1:s}::MetaId = 0;\n\n"
-            "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"//7
+            "static TMetaAutoRegister<{1:s}> {1:s}MetaAutoRegister;\n\n"//8
         };
 
         SourceCode += std::format(StructDef[0], S0Str, Struct->Name);
@@ -295,7 +296,16 @@ std::string CCodeGenerator::ToGeneratedSourceCode(CMeta* Meta, std::vector<std::
             }
             SourceCode += std::format(StructDef[6], S0Str);
         }
-        SourceCode += std::format(StructDef[7], S0Str, Struct->Name);
+        if (Struct->Parent) {
+            if (Struct->IsForwardDeclared) {
+              SourceCode += std::format(StructDef[7], S0Str, std::format(
+                  "GMetaTable->DeferredRegisterList.push_back([Struct] {{ Struct.Parent = (CStruct*)GMetaTable->GetMeta(\"{0:s}\"); }});",  
+                  Struct->Parent->Name));
+            } else {
+              SourceCode += std::format(StructDef[7], S0Str, std::format("Struct.Parent = (CStruct*){0:s}::StaticMeta();", Struct->Parent->Name));
+            }
+        }
+        SourceCode += std::format(StructDef[8], S0Str, Struct->Name);
     }
     return SourceCode;
 }

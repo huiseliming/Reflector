@@ -278,10 +278,10 @@ struct CORE_API CEnumClass : public CMeta
 struct CORE_API CMetaTable {
 public:
 	CMetaTable();
-	std::unordered_map<std::string, int32_t> NameToId;
+	std::unordered_map<std::string, Uint32> NameToId;
 	std::vector<CMeta*> Metas;
-	std::atomic<int32_t> IdCounter{ 1 };
-	std::list<std::function<bool()>> DeferredRegisterList;
+	std::atomic<Uint32> IdCounter{ 1 };
+	std::list<std::function<void()>> DeferredRegisterList;
 	std::list<std::function<void()>> StaticMetaIdInitializerList;
 
 	static CMetaTable& Get();
@@ -308,9 +308,7 @@ public:
 /**
  * can be used after global initialization is complete
 **/
-#ifndef COMPILE_REFLECTOR
 extern CORE_API CMetaTable* GMetaTable;
-#endif
 
 template<typename T>
 struct TEnumClass {};
